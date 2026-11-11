@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Lovelace</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <header class="brand">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        <span>Lovelace</span>
+      </header>
+      <h2 id="history-heading">Sessões</h2>
+      <nav id="history" aria-labelledby="history-heading"></nav>
+    </aside>
+
+    <main class="workspace">
+      <header class="toolbar">
+        <div class="record-status">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="status" role="status">Pronto para gravar</span>
+          <time id="elapsed" hidden>00:00</time>
+          <meter id="level" min="0" max="1" value="0" aria-label="Nível do microfone" hidden></meter>
+        </div>
+        <div class="record-actions">
+          <label for="language">Idioma</label>
+          <select id="language">
+            <option value="pt">Português</option>
+            <option value="en">Inglês</option>
+            <option value="auto">Automático</option>
+          </select>
+          <button id="record" class="primary"><span aria-hidden="true"></span>Gravar</button>
+        </div>
+      </header>
+      <p id="message" class="message" role="status" hidden></p>
+
+      <section id="review" class="review" aria-label="Revisão da sessão" hidden>
+        <div class="review-header">
+          <div class="review-heading">
+            <h1 id="session-title"></h1>
+            <button id="retry" class="secondary" hidden>Processar sessão</button>
+          </div>
+          <div class="document-toolbar">
+            <div class="document-picker" role="group" aria-label="Documento">
+              <button data-document="summary" aria-pressed="true">Síntese</button>
+              <button data-document="transcript" aria-pressed="false">Transcrição</button>
+            </div>
+            <button id="copy" class="secondary">Copiar Markdown</button>
+          </div>
+        </div>
+        <div id="reading-pane" class="reading-pane">
+          <article id="document" class="document"></article>
+        </div>
+        <footer id="player" class="player">
+          <audio id="audio" preload="metadata"></audio>
+          <button id="play" type="button" aria-label="Reproduzir" disabled>
+            <span aria-hidden="true"></span>
+          </button>
+          <time id="current-time">00:00</time>
+          <input id="seek" type="range" min="0" max="1" step="any" value="0" aria-label="Posição no áudio" disabled>
+          <time id="duration">00:00</time>
+        </footer>
+      </section>
+
+      <section id="empty" class="empty">
+        <div class="empty-mark" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <h1 id="empty-title">Sua primeira gravação</h1>
+        <p id="empty-description">Grave uma ideia para ler a síntese e voltar aos trechos da conversa.</p>
+      </section>
+    </main>
+  </body>
+</html>
