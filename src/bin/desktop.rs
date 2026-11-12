@@ -68,16 +68,16 @@ impl Desktop {
         let (timestamp, suffix) = id
             .strip_prefix("sessao-")
             .and_then(|value| value.split_once('-'))
-            .context("Identificador de sessão inválido")?;
+            .context("Invalid session ID")?;
         ensure!(
             timestamp.parse::<u64>().is_ok() && suffix.parse::<u64>().is_ok(),
-            "Identificador de sessão inválido"
+            "Invalid session ID"
         );
         let root = self.sessions().canonicalize()?;
         let path = root.join(id);
         ensure!(
             fs::symlink_metadata(&path)?.is_dir() && path.canonicalize()?.parent() == Some(&root),
-            "Pasta da sessão inválida"
+            "Invalid session folder"
         );
         Ok(path)
     }
@@ -88,7 +88,7 @@ impl Desktop {
         task: impl FnOnce(&Mutex<Job>) -> Result<()> + Send + 'static,
     ) -> Result<()> {
         let mut job = self.job.lock().unwrap();
-        ensure!(!job.status.phase.busy(), "Já há uma sessão em andamento");
+        ensure!(!job.status.phase.busy(), "A session is already in progress");
         let previous = job.status.clone();
         job.status = Status {
             phase,
@@ -110,7 +110,7 @@ impl Desktop {
             }
         }) {
             job.status = previous;
-            return Err(error).context("Não foi possível iniciar a sessão");
+            return Err(error).context("Could not start the session");
         }
         Ok(())
     }
@@ -145,7 +145,7 @@ fn list_sessions(state: &Desktop) -> Result<Vec<Session>> {
     let entries = match fs::read_dir(state.sessions()) {
         Ok(entries) => entries,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error).context("Não foi possível abrir o histórico"),
+        Err(error) => return Err(error).context("Could not open session history"),
     };
     let mut sessions = Vec::new();
     for entry in entries {
@@ -178,17 +178,17 @@ fn list_sessions(state: &Desktop) -> Result<Vec<Session>> {
 
 fn wave_file(session: &Path) -> Result<PathBuf> {
     let path = session.join("audio.wav");
-    let metadata = fs::symlink_metadata(&path).context("Áudio da sessão indisponível")?;
+    let metadata = fs::symlink_metadata(&path).context("Session audio is unavailable")?;
     ensure!(
         metadata.is_file() && metadata.len() > 44,
-        "Áudio da sessão incompleto"
+        "Session audio is incomplete"
     );
     Ok(path)
 }
 
 fn read_document(path: PathBuf) -> Result<Option<Document>> {
     match fs::symlink_metadata(&path) {
-        Ok(metadata) => ensure!(metadata.is_file(), "Documento da sessão inválido"),
+        Ok(metadata) => ensure!(metadata.is_file(), "Invalid session document"),
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error.into()),
     }
@@ -204,7 +204,12 @@ fn read_document(path: PathBuf) -> Result<Option<Document>> {
             id,
         }) => {
             let valid = dest_url
-                .strip_prefix("transcricao.md#trecho-")
+                .strip_prefix("transcricao.md#")
+                .and_then(|fragment| {
+                    fragment
+                        .strip_prefix("segment-")
+                        .or_else(|| fragment.strip_prefix("trecho-"))
+                })
                 .is_some_and(|id| !id.is_empty() && id.bytes().all(|digit| digit.is_ascii_digit()));
             Some(Event::Start(Tag::Link {
                 link_type,
@@ -261,7 +266,7 @@ fn selected_language(language: Option<&str>) -> Result<Option<Language>> {
         Some("en") => Some(Language::En),
         Some("auto") => Some(Language::Auto),
         None => None,
-        _ => bail!("Idioma inválido"),
+        _ => bail!("Invalid spoken language"),
     })
 }
 
@@ -272,7 +277,7 @@ fn process(job: &Mutex<Job>, session: &Path, options: &ProcessingOptions) -> Res
             pipeline::Stage::Synthesizing => Phase::Synthesizing,
         };
     })
-    .context("Áudio salvo. Você pode tentar processar a sessão novamente")
+    .context("Audio saved. You can try processing the session again")
 }
 
 #[tauri::command]
@@ -307,11 +312,11 @@ fn start_recording(language: String, state: State<'_, Desktop>) -> Result<(), St
 fn stop_recording(state: State<'_, Desktop>) -> Result<(), String> {
     let mut job = state.job.lock().unwrap();
     if !matches!(job.status.phase, Phase::Recording) {
-        return Err("A gravação já foi encerrada".into());
+        return Err("Recording has already stopped".into());
     }
     job.status.phase = Phase::Saving;
     if let Some(stop) = job.stop.take() {
-        // Uma falha de captura pode já estar na fila. O worker publica o resultado.
+        // The worker reports any capture error that is already queued.
         let _ = stop.try_send(Ok(()));
     }
     Ok(())
@@ -339,7 +344,7 @@ fn project_root() -> Result<PathBuf> {
     let executable = env::current_exe()?;
     let directory = executable
         .parent()
-        .context("Pasta do aplicativo indisponível")?;
+        .context("Application folder is unavailable")?;
     Ok(directory
         .ancestors()
         .find(|path| path.join("tauri.conf.json").is_file() && path.join("Cargo.toml").is_file())
@@ -375,5 +380,9 @@ fn main() {
             retry
         ])
         .run(tauri::generate_context!())
-        .expect("Não foi possível abrir o Lovelace");
+        .expect("Could not start Lovelace");
 }
+
+#[cfg(test)]
+#[path = "desktop/tests.rs"]
+mod tests;

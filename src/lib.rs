@@ -13,27 +13,36 @@ use std::{
 use anyhow::Result;
 use clap::{Args, ValueEnum};
 
-const WHISPER: &str = "engines/whisper/Release/whisper-cli.exe";
+const WHISPER: &str = if cfg!(windows) {
+    "engines/whisper/Release/whisper-cli.exe"
+} else {
+    "engines/whisper/Release/whisper-cli"
+};
 const MODEL_WHISPER: &str = "models/ggml-small-q5_1.bin";
-const LLAMA: &str = "engines/llama/llama-server.exe";
+const LLAMA: &str = if cfg!(windows) {
+    "engines/llama/llama-server.exe"
+} else {
+    "engines/llama/llama-server"
+};
 const MODEL_LLAMA: &str = "models/qwen2.5-3b-instruct-q4_k_m.gguf";
 
 #[derive(Args)]
 pub struct ProcessingOptions {
-    /// Idioma da fala. O padrão para gravações novas é pt.
-    #[arg(long, value_enum)]
+    /// Spoken language. Defaults to pt for new recordings.
+    #[arg(long = "language", alias = "idioma", value_enum)]
     pub idioma: Option<Language>,
-    /// Usa CPU nas duas etapas.
+    /// Use the CPU for transcription and summarization.
     #[arg(long)]
     cpu: bool,
     #[arg(long, default_value = WHISPER)]
     whisper: PathBuf,
-    #[arg(long, default_value = MODEL_WHISPER)]
+    #[arg(long = "whisper-model", alias = "modelo-whisper", default_value = MODEL_WHISPER)]
     modelo_whisper: PathBuf,
     #[arg(long, default_value = LLAMA)]
     llama: PathBuf,
-    #[arg(long, default_value = MODEL_LLAMA)]
+    #[arg(long = "llama-model", alias = "modelo-llama", default_value = MODEL_LLAMA)]
     modelo_llama: PathBuf,
+    #[cfg(windows)]
     #[arg(skip)]
     hide_engine_windows: bool,
 }
@@ -64,18 +73,23 @@ impl ProcessingOptions {
             modelo_whisper: root.join(MODEL_WHISPER),
             llama: root.join(LLAMA),
             modelo_llama: root.join(MODEL_LLAMA),
+            #[cfg(windows)]
             hide_engine_windows: true,
         }
     }
 
     fn engine_command(&self, executable: PathBuf) -> Command {
-        let mut command = Command::new(executable);
+        let command = Command::new(executable);
         #[cfg(windows)]
-        if self.hide_engine_windows {
+        let command = {
             use std::os::windows::process::CommandExt;
             const CREATE_NO_WINDOW: u32 = 0x08000000;
-            command.creation_flags(CREATE_NO_WINDOW);
-        }
+            let mut command = command;
+            if self.hide_engine_windows {
+                command.creation_flags(CREATE_NO_WINDOW);
+            }
+            command
+        };
         command
     }
 }
@@ -92,4 +106,32 @@ pub fn new_session(root: &Path) -> Result<PathBuf> {
         }
     }
     unreachable!()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sessions_created_in_the_same_root_get_distinct_directories() -> Result<()> {
+        let workspace = tempfile::tempdir()?;
+        let root = workspace.path().join("sessoes");
+
+        let first = new_session(&root)?;
+        let second = new_session(&root)?;
+
+        assert_ne!(first, second);
+        for session in [first, second] {
+            assert!(session.is_dir());
+            assert_eq!(session.parent(), Some(root.as_path()));
+            assert!(
+                session
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("sessao-")
+            );
+        }
+        Ok(())
+    }
 }

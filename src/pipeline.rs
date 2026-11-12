@@ -56,11 +56,7 @@ pub fn process_with_progress(
     progress: impl Fn(Stage),
 ) -> Result<()> {
     let wav = session.join("audio.wav");
-    ensure!(
-        wav.is_file(),
-        "Arquivo de áudio ausente em {}",
-        wav.display()
-    );
+    ensure!(wav.is_file(), "Audio file missing at {}", wav.display());
     let lock = OpenOptions::new()
         .read(true)
         .write(true)
@@ -68,7 +64,7 @@ pub fn process_with_progress(
         .truncate(false)
         .open(session.join(".processar.lock"))?;
     lock.try_lock()
-        .context("Não foi possível reservar a sessão para processamento")?;
+        .context("Could not lock the session for processing")?;
 
     let json = session.join("whisper.json");
     let output = match fs::read(&json) {
@@ -80,17 +76,28 @@ pub fn process_with_progress(
             save(&json, &bytes)?;
             output
         }
-        Err(error) => return Err(error).context("Não foi possível ler whisper.json"),
+        Err(error) => return Err(error).context("Could not read whisper.json"),
     };
     let segments = &output.transcription;
 
     let transcript = session.join("transcricao.md");
-    if !transcript.try_exists()? {
+    let segment_anchor = if transcript.try_exists()? {
+        let markdown = fs::read_to_string(&transcript).context("Could not read the transcript")?;
+        if markdown
+            .lines()
+            .any(|line| line.starts_with("### Segment "))
+        {
+            "segment"
+        } else {
+            "trecho"
+        }
+    } else {
         save(&transcript, render_transcript(segments).as_bytes())?;
-    }
-    println!("Transcrição em {}", transcript.display());
+        "segment"
+    };
+    println!("Transcript saved to {}", transcript.display());
     if segments.is_empty() {
-        println!("O Whisper não retornou trechos de fala.");
+        println!("Whisper found no speech segments.");
     }
 
     let detected = output
@@ -105,22 +112,22 @@ pub fn process_with_progress(
         _ => Language::Auto,
     };
     progress(Stage::Synthesizing);
-    let summary = synthesis::generate(session, segments, language, options)?;
+    let summary = synthesis::generate(session, segments, segment_anchor, language, options)?;
     let summary_path = session.join("sintese.md");
     save(&summary_path, summary.as_bytes())?;
-    println!("Síntese em {}", summary_path.display());
+    println!("Summary saved to {}", summary_path.display());
     Ok(())
 }
 
 fn transcribe(session: &Path, wav: &Path, options: &ProcessingOptions) -> Result<Vec<u8>> {
     ensure!(
         options.whisper.is_file(),
-        "whisper-cli ausente em {}",
+        "whisper-cli missing at {}",
         options.whisper.display()
     );
     ensure!(
         options.modelo_whisper.is_file(),
-        "Modelo Whisper ausente em {}",
+        "Whisper model missing at {}",
         options.modelo_whisper.display()
     );
 
@@ -143,33 +150,31 @@ fn transcribe(session: &Path, wav: &Path, options: &ProcessingOptions) -> Result
         command.arg("--no-gpu");
     }
 
-    println!("Transcrevendo com Whisper...");
-    let status = command
-        .status()
-        .context("Não foi possível iniciar o whisper-cli")?;
-    ensure!(status.success(), "O whisper-cli terminou com {status}");
-    fs::read(output.with_extension("json")).context("O whisper-cli não gerou o JSON esperado")
+    println!("Transcribing with Whisper...");
+    let status = command.status().context("Could not start whisper-cli")?;
+    ensure!(status.success(), "whisper-cli exited with {status}");
+    fs::read(output.with_extension("json")).context("whisper-cli did not produce the expected JSON")
 }
 
 fn parse_whisper(bytes: &[u8]) -> Result<WhisperOutput> {
     let mut output: WhisperOutput =
-        serde_json::from_slice(bytes).context("JSON do Whisper inválido")?;
+        serde_json::from_slice(bytes).context("Invalid Whisper JSON")?;
     output
         .transcription
         .retain(|segment| !segment.text.trim().is_empty());
     for segment in &output.transcription {
         ensure!(
             segment.offsets.from <= segment.offsets.to,
-            "Trecho com tempo inválido no Whisper"
+            "Invalid timestamp range in a Whisper segment"
         );
     }
     Ok(output)
 }
 
 fn render_transcript(segments: &[Segment]) -> String {
-    let mut text = String::from("# Transcrição\n\n");
+    let mut text = String::from("# Transcript\n\n");
     if segments.is_empty() {
-        text.push_str("Nenhum trecho de fala identificado.\n");
+        text.push_str("No speech segments found.\n");
     }
     for (index, segment) in segments.iter().enumerate() {
         let id = index + 1;
@@ -178,7 +183,7 @@ fn render_transcript(segments: &[Segment]) -> String {
         let speech = markdown_text(&segment.text);
         writeln!(
             text,
-            "### Trecho {id:04}\n\n**{start} – {end}**\n\n{speech}\n"
+            "### Segment {id:04}\n\n**{start} – {end}**\n\n{speech}\n"
         )
         .unwrap();
     }
@@ -220,10 +225,10 @@ fn timestamp(ms: u64) -> String {
 }
 
 fn save(path: &Path, bytes: &[u8]) -> Result<()> {
-    let directory = path.parent().context("Caminho de saída sem pasta")?;
+    let directory = path.parent().context("Output path has no parent folder")?;
     let mut file = tempfile::NamedTempFile::new_in(directory)?;
     file.write_all(bytes)?;
     file.persist(path)
-        .with_context(|| format!("Não foi possível salvar {}", path.display()))?;
+        .with_context(|| format!("Could not save {}", path.display()))?;
     Ok(())
 }

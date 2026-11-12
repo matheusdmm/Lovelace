@@ -1,0 +1,70 @@
+name: Build binaries
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Windows x64
+            runner: windows-2022
+            toolchain: stable-x86_64-pc-windows-gnu
+            archive: lovelace-windows-x64.zip
+          - platform: Linux x64
+            runner: ubuntu-24.04
+            toolchain: stable-x86_64-unknown-linux-gnu
+            archive: lovelace-linux-x64.tar.gz
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libasound2-dev libwebkit2gtk-4.1-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install Rust
+        run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal
+
+      - name: Run regression tests
+        run: cargo +${{ matrix.toolchain }} test --locked --release --features desktop
+
+      - name: Build CLI and desktop
+        run: cargo +${{ matrix.toolchain }} build --locked --release --features desktop --bins
+
+      - name: Package Windows binaries
+        if: runner.os == 'Windows'
+        run: |
+          ./target/release/lovelace.exe --version
+          Compress-Archive -LiteralPath @(
+            'target/release/lovelace.exe'
+            'target/release/lovelace-desktop.exe'
+            'target/release/WebView2Loader.dll'
+          ) -DestinationPath '${{ matrix.archive }}'
+
+      - name: Package Linux binaries
+        if: runner.os == 'Linux'
+        run: |
+          ./target/release/lovelace --version
+          tar -czf "${{ matrix.archive }}" -C target/release lovelace lovelace-desktop
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ matrix.archive }}
+          archive: false
+          if-no-files-found: error

@@ -1,56 +1,99 @@
 # Lovelace
 
-Gravador de ideias em Rust para Windows. Ao encerrar a gravação, o Lovelace salva o áudio, transcreve a fala e gera uma síntese em Markdown com links para os trechos correspondentes. A inferência roda na máquina.
+Lovelace is an idea recorder for Windows and Linux that produces transcripts and summaries in Markdown. Audio and inference stay on your machine. Each summary note links to the transcript segments that support it.
 
-## Interface desktop
+The [Lovelace website](website/) includes downloads, an audit guide, and instructions for building and running the app. See the [website README](website/README.md) for the Coolify configuration, Docker commands, and release link settings.
 
-Com o MinGW x64 no PATH e o runtime Microsoft Edge WebView2 instalado, execute na raiz do projeto:
+## Binaries
+
+The [Build binaries workflow](.github/workflows/build.yml) runs on pushes and pull requests to `main`. You can also run it manually from **Actions**. Downloads are available under **Artifacts** for each run.
+
+| x64 artifact | Contents |
+| --- | --- |
+| `lovelace-windows-x64.zip` | `lovelace.exe`, `lovelace-desktop.exe` and `WebView2Loader.dll` |
+| `lovelace-linux-x64.tar.gz` | `lovelace` and `lovelace-desktop`, built on Ubuntu 24.04 |
+
+The Windows desktop app requires Microsoft Edge WebView2 Runtime. On Linux, the binaries use ALSA and the desktop app also requires WebKitGTK 4.1. Extract the archive and run the CLI from the extracted directory. Install the engines and models separately in that directory.
+
+## Requirements
+
+- On Windows, build with Rust 1.89 or later, the `stable-x86_64-pc-windows-gnu` toolchain and x64 MinGW-w64 (`gcc.exe` on `PATH`).
+- On Linux, use the native `stable` toolchain and install the build dependencies listed in the workflow.
+- For transcription and summarization, install the engines for your platform, their libraries and the models at the paths below.
+
+| Path | Download |
+| --- | --- |
+| `engines/whisper/Release/whisper-cli.exe` | [whisper.cpp for Windows x64](https://github.com/ggml-org/whisper.cpp/releases/tag/b5127) |
+| `engines/llama/llama-server.exe` | [llama.cpp for Windows x64 with Vulkan](https://github.com/ggml-org/llama.cpp/releases/tag/b12289) |
+| `models/ggml-small-q5_1.bin` | [Quantized multilingual Whisper Small](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin) |
+| `models/qwen2.5-3b-instruct-q4_k_m.gguf` | [Qwen2.5 3B Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/blob/main/qwen2.5-3b-instruct-q4_k_m.gguf) |
+
+This setup uses Whisper on the CPU and llama.cpp with Vulkan. In the CLI, use `--cpu` to run both stages on the CPU. Override the default paths with `--whisper`, `--llama`, `--whisper-model` or `--llama-model`.
+
+On Linux, install the native executables at `engines/whisper/Release/whisper-cli` and `engines/llama/llama-server`. Use the same model paths.
+
+## Bring your own model
+
+Lovelace uses two local models. Choose a multilingual Whisper `.bin` for English and Brazilian Portuguese transcription and an instruction-tuned GGUF for summarization. The desktop app reads the default paths above. The CLI accepts custom paths on both `record` and `process`.
+
+```sh
+lovelace record --language pt --whisper-model models/ggml-base-q5_1.bin --llama-model models/qwen2.5-1.5b-instruct-q4_k_m.gguf
+```
+
+Start with Whisper Small and Qwen2.5 3B Instruct. Try [Whisper Base or Medium](https://huggingface.co/ggerganov/whisper.cpp/tree/main) if you want to compare transcription time and quality, and [Qwen2.5 1.5B](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF) or [Qwen2.5 7B](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF) for smaller or larger summarization models. Both alternatives are published under Apache 2.0. The default [Qwen2.5 3B](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF) is published under the Qwen Research license.
+
+`process` reuses `whisper.json` when present and keeps the existing transcript Markdown. Use a new recording to test a different transcription model. To compare summary models on the same transcript, run `process` on a copy of the session with a different `--llama-model`. Each run replaces the summary in its session folder.
+
+## Desktop
+
+Run this from the project root in PowerShell.
 
 ```powershell
 cargo run --release --features desktop --bin lovelace-desktop
 ```
 
-Selecione o idioma e clique em **Gravar**. A interface usa a entrada padrão do Windows. Ao clicar em **Encerrar**, a gravação é salva em `sessoes/` e o processamento continua em segundo plano. Configure os modelos e executáveis descritos abaixo para gerar a transcrição e a síntese. Se o processamento falhar, selecione a gravação no histórico e use **Processar sessão** para tentar novamente.
+On Linux, use `cargo +stable run --release --features desktop --bin lovelace-desktop`.
 
-O histórico também abre sessões criadas pela CLI. Na síntese, clique num tempo para ir ao trecho da transcrição e posicionar o player. **Copiar Markdown** copia o texto original do documento aberto.
+- **Recorder**. The interface is in English. Under **Spoken language**, choose **Portuguese**, **English** or **Auto-detect** for the transcript and summary. Select **Record** to capture from the default microphone and see the elapsed time and input level. **Stop** saves the WAV file and starts processing in the background.
+- **History**. The dashboard shows the three most recent sessions. Open **History** for the full list, including sessions recorded with the CLI. Each status shows whether the audio, transcript or summary is ready.
+- **Documents and audio**. Open a session to switch between **Summary** and **Transcript**, copy the original Markdown or play the WAV file. Select a timestamp in the summary to open its transcript segment and seek to that point in the audio.
+- **Reprocessing**. Select **Process session** to resume processing a session that has no summary. While a recording or processing job is active, the header shows its status in the history, documents and audio views.
 
-## Começar pelo microfone
-
-Na raiz do projeto, com o MinGW x64 (`gcc.exe`) no PATH e a toolchain Rust GNU disponível:
+## CLI
 
 ```powershell
-cargo run --release -- gravar --so-audio
+cargo run --release -- microphones
+cargo run --release -- record --microphone 0 --audio-only
+cargo run --release -- record --language en
+cargo run --release -- process ".\sessoes\SESSION-NAME"
 ```
 
-Fale depois da mensagem **Gravando** e pressione Enter para salvar. O terminal mostra o caminho de `audio.wav`. Use `microfones` para listar as entradas e `gravar --microfone 0` para selecionar a entrada de índice 0. Por padrão, o app usa a entrada selecionada no Windows. Se a captura falhar, confira a entrada padrão e a permissão de microfone para aplicativos da área de trabalho nas Configurações do Windows.
+On Linux, use `cargo +stable run` and pass `./sessoes/SESSION-NAME` to `process`. Replace `SESSION-NAME` with the session folder shown in the terminal. Press Enter to stop recording. The CLI uses the default input unless you pass `--microphone`. Use `--audio-only` to save the WAV file for later processing.
 
-Para adicionar a toolchain GNU à instalação existente, use `rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal`.
+Use `--language pt` for Brazilian Portuguese, `--language en` for English or `--language auto` to detect the main spoken language. Portuguese is the default for new recordings. The original Portuguese commands and flags still work as aliases.
 
-## Transcrição e síntese
+## Regression tests
 
-Coloque os executáveis e suas DLLs nas pastas abaixo. Os links apontam para os arquivos dos projetos.
+Run the suite from the project root on Windows.
 
-| Caminho esperado | Download |
+```powershell
+cargo test --locked --release --features desktop
+```
+
+On Linux, use `cargo +stable test --locked --release --features desktop` with the build dependencies listed in the workflow. The suite covers CLI commands, session processing and retries, summary references, and the desktop backend for history and Markdown. It uses temporary sessions with generated WAV files and fixed Whisper results, so it runs without a microphone or models. The build workflow runs the suite on both platforms before packaging.
+
+## Pipeline and storage
+
+- CPAL captures audio at the input sample rate and Hound writes a 16-bit mono WAV file. [audio.rs](src/audio.rs)
+- Whisper returns timestamped segments that Lovelace renders as Markdown. Reprocessing reuses `whisper.json` and any existing transcript Markdown, then regenerates the summary. [pipeline.rs](src/pipeline.rs)
+- Lovelace runs `llama-server` on `127.0.0.1` and summarizes the transcript in batches. An idea revisited in different batches can appear in more than one note. [synthesis.rs](src/synthesis.rs)
+- The desktop app exposes Tauri commands to the HTML, CSS and JavaScript frontend. The CLI and desktop app share the same pipeline. [desktop.rs](src/bin/desktop.rs) [Frontend](ui/)
+
+Sessions are stored in `sessoes/sessao-<timestamp>-<suffix>/`.
+
+| File | Contents |
 | --- | --- |
-| `engines/whisper/Release/whisper-cli.exe` | [whisper.cpp para Windows x64](https://github.com/ggml-org/whisper.cpp/releases/tag/b5127) |
-| `engines/llama/llama-server.exe` | [llama.cpp para Windows x64 com Vulkan](https://github.com/ggml-org/llama.cpp/releases/tag/b12289) |
-| `models/ggml-small-q5_1.bin` | [Whisper Small multilíngue quantizado](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin) |
-| `models/qwen2.5-3b-instruct-q4_k_m.gguf` | [Qwen2.5 3B Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/blob/main/qwen2.5-3b-instruct-q4_k_m.gguf) |
-
-O binário oficial de Whisper indicado acima roda em CPU. O de llama.cpp usa Vulkan para a síntese. Se precisar usar CPU nas duas etapas, adicione `--cpu`. Use `--whisper`, `--llama`, `--modelo-whisper` e `--modelo-llama` para apontar para outros arquivos.
-
-```powershell
-cargo run --release -- gravar
-```
-
-O padrão é PT-BR. Para uma sessão em inglês, use `gravar --idioma en`. Use `--idioma auto` para detectar o idioma predominante. O Whisper transcreve no idioma da fala.
-
-Cada pasta em `sessoes/` contém `audio.wav`, `transcricao.md` e `sintese.md`. Abra a síntese na visualização de Markdown e clique nos tempos ao lado de cada apontamento para ir à seção correspondente da transcrição. O JSON do Whisper fica na sessão para que o app possa repetir a síntese usando os mesmos trechos. Gravações longas são sintetizadas em blocos, então uma ideia retomada em outro bloco pode aparecer em mais de um apontamento.
-
-Para processar uma gravação anterior ou retomar após uma falha, substitua `NOME-DA-SESSAO` pelo nome que o terminal mostrou:
-
-```powershell
-cargo run --release -- processar .\sessoes\NOME-DA-SESSAO
-```
-
-O comando preserva o WAV e reaproveita o JSON de transcrição existente, incluindo o idioma. Ao processar pela primeira vez uma sessão gravada com `--so-audio`, passe `--idioma en` se a fala estiver em inglês.
+| `audio.wav` | Original recording |
+| `whisper.json` | Detected or selected language and timestamped speech segments |
+| `transcricao.md` | Transcript with segment anchors |
+| `sintese.md` | Summary notes with links to the transcript |

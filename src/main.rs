@@ -7,7 +7,7 @@ use lovelace::{ProcessingOptions, audio, new_session, pipeline};
 #[derive(Parser)]
 #[command(
     version,
-    about = "Grave ideias e gere uma síntese local com referências à fala."
+    about = "Record ideas and generate a local summary with links to the transcript."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -16,22 +16,25 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Action {
-    /// Grava pelo microfone. Pressione Enter para encerrar.
-    Gravar {
-        /// Índice mostrado por `microfones`. Por padrão, usa a entrada do sistema.
-        #[arg(long)]
-        microfone: Option<usize>,
-        /// Grava o WAV para processar depois.
-        #[arg(long)]
-        so_audio: bool,
+    /// Record from a microphone. Press Enter to stop.
+    #[command(alias = "gravar")]
+    Record {
+        /// Input index from `microphones`. Defaults to the system input.
+        #[arg(long, alias = "microfone")]
+        microphone: Option<usize>,
+        /// Save the WAV file for processing later.
+        #[arg(long, alias = "so-audio")]
+        audio_only: bool,
         #[command(flatten)]
         options: ProcessingOptions,
     },
-    /// Lista as entradas de áudio disponíveis.
-    Microfones,
-    /// Processa uma sessão já gravada e reaproveita a transcrição, se houver.
-    Processar {
-        pasta: PathBuf,
+    /// List available audio inputs.
+    #[command(alias = "microfones")]
+    Microphones,
+    /// Process a recorded session using its existing transcript when available.
+    #[command(alias = "processar")]
+    Process {
+        session: PathBuf,
         #[command(flatten)]
         options: ProcessingOptions,
     },
@@ -39,27 +42,27 @@ enum Action {
 
 fn main() -> Result<()> {
     match Cli::parse().command {
-        Action::Gravar {
-            microfone,
-            so_audio,
+        Action::Record {
+            microphone,
+            audio_only,
             options,
         } => {
-            let device = audio::input_device(microfone)?;
+            let device = audio::input_device(microphone)?;
             let session = new_session(Path::new("sessoes"))?;
             let wav = session.join("audio.wav");
             audio::record(&device, &wav)?;
-            println!("Gravação salva em {}", wav.display());
-            if !so_audio {
+            println!("Recording saved to {}", wav.display());
+            if !audio_only {
                 pipeline::process(&session, &options).with_context(|| {
                     format!(
-                        "Áudio preservado. Para tentar de novo, use processar \"{}\"",
+                        "Audio saved. To retry, run lovelace process \"{}\"",
                         session.display()
                     )
                 })?;
             }
             Ok(())
         }
-        Action::Microfones => audio::list_inputs(),
-        Action::Processar { pasta, options } => pipeline::process(&pasta, &options),
+        Action::Microphones => audio::list_inputs(),
+        Action::Process { session, options } => pipeline::process(&session, &options),
     }
 }

@@ -21,7 +21,7 @@ type WavWriter = hound::WavWriter<BufWriter<File>>;
 pub fn list_inputs() -> Result<()> {
     let host = cpal::default_host();
     if let Some(device) = host.default_input_device() {
-        println!("Entrada padrão: {}", device.name()?);
+        println!("Default input: {}", device.name()?);
     }
     for (index, device) in host.input_devices()?.enumerate() {
         println!("{index}: {}", device.name()?);
@@ -35,22 +35,22 @@ pub fn input_device(index: Option<usize>) -> Result<Device> {
         Some(index) => host
             .input_devices()?
             .nth(index)
-            .with_context(|| format!("Entrada {index} não encontrada. Use o comando microfones.")),
+            .with_context(|| format!("Input {index} not found. Run `lovelace microphones` to list inputs.")),
         None => host.default_input_device().context(
-            "Nenhum microfone padrão. Confira a entrada e a permissão de microfone no Windows.",
+            "No default microphone found. Check your system audio input and microphone permissions.",
         ),
     }
 }
 
 pub fn record(device: &Device, path: &Path) -> Result<()> {
     record_until(device, path, None, |stop| {
-        let name = device.name().unwrap_or_else(|_| "entrada de áudio".into());
-        println!("Gravando pelo microfone {name}. Pressione Enter para encerrar.");
+        let name = device.name().unwrap_or_else(|_| "audio input".into());
+        println!("Recording from {name}. Press Enter to stop.");
         thread::spawn(move || {
             let result = io::stdin()
                 .read_line(&mut String::new())
                 .map(|_| ())
-                .context("Não foi possível ler o terminal");
+                .context("Could not read terminal input");
             let _ = stop.try_send(result);
         });
     })
@@ -64,7 +64,7 @@ pub fn record_until(
 ) -> Result<()> {
     let input = device
         .default_input_config()
-        .context("Não foi possível obter o formato do microfone")?;
+        .context("Could not get the microphone format")?;
     let config = input.config();
     let spec = hound::WavSpec {
         channels: 1,
@@ -86,23 +86,24 @@ pub fn record_until(
         SampleFormat::U16 => input_stream::<u16>(device, &config, &writer, &stop, peak),
         SampleFormat::U32 => input_stream::<u32>(device, &config, &writer, &stop, peak),
         SampleFormat::U64 => input_stream::<u64>(device, &config, &writer, &stop, peak),
-        format => bail!("Formato de microfone incompatível: {format}"),
+        format => bail!("Unsupported microphone format ({format})"),
     }
-    .context("Não foi possível abrir o microfone")?;
-    stream
-        .play()
-        .context("Não foi possível iniciar a captura")?;
+    .context("Could not open the microphone")?;
+    stream.play().context("Could not start audio capture")?;
     ready(stop);
     let result = stopped.recv();
     drop(stream);
     let writer = Arc::into_inner(writer)
-        .context("O microfone ainda está usando o arquivo de áudio")?
+        .context("The microphone is still using the audio file")?
         .into_inner()
-        .map_err(|_| anyhow::anyhow!("A gravação foi interrompida"))?;
+        .map_err(|_| anyhow::anyhow!("Recording interrupted"))?;
     let samples = writer.duration();
     writer.finalize()?;
-    result?.with_context(|| format!("Gravação interrompida. WAV em {}", path.display()))?;
-    ensure!(samples > 0, "O microfone não entregou amostras de áudio");
+    result?.with_context(|| format!("Recording interrupted. WAV saved to {}", path.display()))?;
+    ensure!(
+        samples > 0,
+        "The microphone did not provide any audio samples"
+    );
     Ok(())
 }
 
@@ -118,7 +119,7 @@ where
     f32: FromSample<T>,
 {
     let channels = usize::from(config.channels);
-    ensure!(channels > 0, "O microfone informou zero canais");
+    ensure!(channels > 0, "The microphone reported zero channels");
     let writer = Arc::clone(writer);
     let write_error = stop.clone();
     let stream_error = stop.clone();
@@ -126,7 +127,7 @@ where
         config,
         move |data: &[T], _| {
             let Ok(mut writer) = writer.lock() else {
-                let _ = write_error.try_send(Err(anyhow::anyhow!("Falha na gravação")));
+                let _ = write_error.try_send(Err(anyhow::anyhow!("Recording failed")));
                 return;
             };
             let mut level = 0.0_f32;
@@ -141,7 +142,8 @@ where
                     level = level.max(mono.abs());
                 }
                 if let Err(error) = writer.write_sample(pcm) {
-                    let _ = write_error.try_send(Err(error).context("Falha ao gravar o WAV"));
+                    let _ =
+                        write_error.try_send(Err(error).context("Could not write the WAV file"));
                     break;
                 }
             }
@@ -150,7 +152,8 @@ where
             }
         },
         move |error| {
-            let _ = stream_error.try_send(Err(error).context("O microfone interrompeu a captura"));
+            let _ =
+                stream_error.try_send(Err(error).context("The microphone stopped capturing audio"));
         },
         None,
     )?)

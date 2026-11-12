@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Lovelace is a local AI companion for thinking out loud. Record your ideas and get a timestamped transcript and linked Markdown notes.">
+  <meta name="theme-color" content="#f8f6f0">
+  <title>Lovelace — Think out loud.</title>
+  <link rel="icon" href="assets/lovelace.png" type="image/png">
+  <link rel="stylesheet" href="styles.css">
+  <script src="repository.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand" href="#top"><img src="assets/lovelace.png" width="30" height="30" alt=""> Lovelace</a>
+      <nav aria-label="Main navigation">
+        <a href="#workflow">How it works</a>
+        <a href="#use-cases">Who it’s for</a>
+        <a href="#models">Models</a>
+        <a href="#source">Source</a>
+      </nav>
+      <a class="header-cta" href="#get-started">Get started <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="shell hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="signal-dot" aria-hidden="true"></span> YOUR LOCAL AI COMPANION</p>
+          <h1 id="hero-title">Think out<br><em>loud.</em></h1>
+          <p class="hero-description">Follow a tangent. Rehearse a talk. Say the half-formed thing. Lovelace turns your voice into a transcript and notes you can come back to.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#get-started">Get started <span aria-hidden="true">↗</span></a>
+            <a class="button button-secondary" href="#workflow">See how it works <span aria-hidden="true">↓</span></a>
+          </div>
+        </div>
+        <div class="hero-art">
+          <img class="hero-image" src="assets/studio-microphone.webp" alt="A vintage broadcast microphone lit in deep red" width="1200" height="800" fetchpriority="high">
+          <div class="photo-corner top-left" aria-hidden="true"></div>
+          <div class="photo-corner top-right" aria-hidden="true"></div>
+          <div class="photo-corner bottom-left" aria-hidden="true"></div>
+          <div class="photo-corner bottom-right" aria-hidden="true"></div>
+          <div class="photo-label" aria-hidden="true"><span class="signal-dot"></span> REC</div>
+          <div class="waveform" aria-hidden="true"></div>
+        </div>
+      </div>
+      <div class="shell product-meta">
+        <span><span class="meta-mark" aria-hidden="true">◈</span> Runs on your machine</span>
+        <span><span class="meta-mark" aria-hidden="true">↓</span> Saves as Markdown</span>
+        <span><span class="meta-mark" aria-hidden="true">⊞</span> Windows &amp; Linux</span>
+      </div>
+    </section>
+
+    <section id="workflow" class="section shell" aria-labelledby="workflow-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">HOW IT WORKS</p>
+          <h2 id="workflow-title">Find the thread.</h2>
+        </div>
+        <p>Speak freely, then stop to let Lovelace transcribe the recording and pull out the ideas. Each summary timestamp takes you back to the words behind it.</p>
+      </div>
+      <figure class="session-preview">
+        <img src="assets/lovelace-session.jpg" width="1102" height="792" loading="lazy"
+          alt="The Lovelace desktop app showing three notes for a talk rehearsal, links to the transcript, and the session audio paused at 00:09.">
+        <figcaption>
+          <span>Example session for a talk rehearsal in Lovelace for Windows.</span>
+          <a href="assets/lovelace-session.jpg" target="_blank" rel="noopener">View full size <span aria-hidden="true">↗</span></a>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section id="use-cases" class="use-cases" aria-labelledby="audience-title">
+      <div class="shell section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">WHO IT’S FOR</p>
+            <h2 id="audience-title">Ideas start mid-sentence.</h2>
+          </div>
+          <p>For anyone whose best ideas show up when they start talking.</p>
+        </div>
+        <dl class="audience-list">
+          <div><dt>Speakers</dt><dd>Rehearse a talk and go back to the moments where the story lands.</dd></div>
+          <div><dt>Artists &amp; writers</dt><dd>Talk through a sketch, an essay, or a scene and keep the lines you want to build on.</dd></div>
+          <div><dt>Podcasters</dt><dd>Talk through an episode angle and pull the strongest beats into your outline.</dd></div>
+          <div><dt>Verbal thinkers</dt><dd>Follow an idea wherever it goes and give yourself something to pick up tomorrow.</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section id="get-started" class="section shell" aria-labelledby="download-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">DOWNLOAD</p>
+          <h2 id="download-title">Get Lovelace.</h2>
+        </div>
+        <p>Each x64 archive contains the desktop app and CLI. Install the local engines and models after extracting it.</p>
+      </div>
+      <ul class="download-list">
+        <li>
+          <div><strong>Windows x64</strong><code>lovelace-windows-x64.zip</code></div>
+          <span data-link-placeholder="windows">Download coming soon</span>
+          <a class="button button-secondary" data-repository-link="windows" hidden>Download for Windows <span aria-hidden="true">↓</span></a>
+        </li>
+        <li>
+          <div><strong>Linux x64</strong><code>lovelace-linux-x64.tar.gz</code></div>
+          <span data-link-placeholder="linux">Download coming soon</span>
+          <a class="button button-secondary" data-repository-link="linux" hidden>Download for Linux <span aria-hidden="true">↓</span></a>
+        </li>
+      </ul>
+      <div class="section-links">
+        <a href="#build-from-source">Build from source ↓</a>
+        <a href="#run-locally">Set up and run ↓</a>
+      </div>
+    </section>
+
+    <section id="source" class="source-section" aria-labelledby="source-title">
+      <div class="section shell">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">OPEN SOURCE &amp; AUDITABILITY</p>
+            <h2 id="source-title">Follow the code.</h2>
+          </div>
+          <p>Lovelace is built to be audited from source. You can trace how it records audio, calls the local models, and links each note back to the transcript.</p>
+        </div>
+        <dl class="source-list">
+          <div><dt>Capture</dt><dd><code>src/audio.rs</code> writes microphone input to a local WAV file.</dd></div>
+          <div><dt>Transcription</dt><dd><code>src/pipeline.rs</code> runs Whisper and saves timestamped segments as Markdown.</dd></div>
+          <div><dt>Summarization</dt><dd><code>src/synthesis.rs</code> calls a local llama.cpp server at <code>127.0.0.1</code> and writes notes with source timestamps.</dd></div>
+          <div><dt>Builds</dt><dd><code>.github/workflows/build.yml</code> shows how the Windows and Linux binaries are tested and packaged.</dd></div>
+        </dl>
+        <p class="source-status" data-link-placeholder="source">Source repository link coming soon.</p>
+        <a class="source-link" data-repository-link="source" hidden>View source repository <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
+
+    <section id="build-from-source" class="section shell setup" aria-labelledby="build-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">BUILD FROM SOURCE</p>
+          <h2 id="build-title">Build your own version.</h2>
+        </div>
+        <p>Get the source from the Git repository, then build the desktop app and CLI from the checkout. Cargo uses the versions in <code>Cargo.lock</code>.</p>
+      </div>
+      <div class="setup-body">
+        <div class="platform-picker" role="group" aria-label="Operating system">
+          <button type="button" data-platform="windows" aria-controls="windows-setup" aria-pressed="true">Windows</button>
+          <button type="button" data-platform="linux" aria-controls="linux-setup" aria-pressed="false">Linux</button>
+        </div>
+        <div id="windows-setup">
+          <p>Install <a href="https://rustup.rs/">rustup</a> and x64 <a href="https://packages.msys2.org/package/mingw-w64-x86_64-gcc">MinGW-w64 GCC</a>. With MSYS2, install <code>mingw-w64-x86_64-gcc</code> from the MINGW64 shell and add its <code>mingw64\bin</code> folder to the Windows <code>PATH</code>. Run these commands in PowerShell from the repository root.</p>
+          <div class="command"><code>rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
+cargo build --locked --release --features desktop --bins</code><button class="copy-command" type="button">Copy</button></div>
+          <p class="setup-next">The build writes <code>lovelace.exe</code> and <code>lovelace-desktop.exe</code> to <code>target/release/</code>. The desktop executable uses <code>WebView2Loader.dll</code> alongside it.</p>
+        </div>
+        <div id="linux-setup" hidden>
+          <p>Install <a href="https://rustup.rs/">rustup</a>. On Ubuntu 24.04, install the system build dependencies and run Cargo from the repository root.</p>
+          <div class="command"><code>sudo apt-get update
+sudo apt-get install build-essential pkg-config libasound2-dev libwebkit2gtk-4.1-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev
+rustup toolchain install stable --profile minimal
+cargo +stable build --locked --release --features desktop --bins</code><button class="copy-command" type="button">Copy</button></div>
+          <p class="setup-next">The build writes <code>lovelace</code> and <code>lovelace-desktop</code> to <code>target/release/</code>.</p>
+        </div>
+        <p class="copy-status" role="status"></p>
+      </div>
+    </section>
+
+    <section id="run-locally" class="section shell setup" aria-labelledby="run-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">LOCAL SETUP</p>
+          <h2 id="run-title">Make a first recording.</h2>
+        </div>
+        <p>Use a microphone and install the runtime libraries, engines, and models on the computer where you plan to record.</p>
+      </div>
+      <div class="setup-body run-guide">
+        <div>
+          <h3>Install the desktop runtime</h3>
+          <p>On Windows, install <a href="https://developer.microsoft.com/en-us/microsoft-edge/webview2/">Microsoft Edge WebView2 Runtime</a> and keep the loader DLL beside the app. On Ubuntu 24.04, install the system libraries used by the CLI and desktop app.</p>
+          <div class="command"><code>sudo apt-get update
+sudo apt-get install libasound2t64 libwebkit2gtk-4.1-0 libxdo3 libayatana-appindicator3-1 librsvg2-2</code><button class="copy-command" type="button">Copy</button></div>
+        </div>
+        <div>
+          <h3>Add the engines and models</h3>
+          <p>Use the extracted archive folder or the root of your source checkout. Create the paths below and install the libraries that come with each engine. Add <code>.exe</code> to both engine filenames on Windows. On Linux, make the engine binaries executable and keep their shared libraries available to the loader.</p>
+          <ul class="engine-list">
+            <li><a href="https://github.com/ggml-org/whisper.cpp/releases/tag/b5127">Whisper CLI</a><code>engines/whisper/Release/whisper-cli</code><span>Choose the CPU build for your platform.</span></li>
+            <li><a href="https://github.com/ggml-org/llama.cpp/releases/tag/b12289">llama.cpp server</a><code>engines/llama/llama-server</code><span>For GPU acceleration, choose the Vulkan build and install a compatible driver. The CLI supports <code>--cpu</code> with a CPU build.</span></li>
+            <li><a href="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin">Whisper Small</a><code>models/ggml-small-q5_1.bin</code><span>Multilingual speech recognition model.</span></li>
+            <li><a href="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/blob/main/qwen2.5-3b-instruct-q4_k_m.gguf">Qwen2.5 3B Instruct</a><code>models/qwen2.5-3b-instruct-q4_k_m.gguf</code><span>Download the Q4_K_M GGUF for summarization.</span></li>
+          </ul>
+          <p class="setup-next"><a href="#models">Compare models and use your own files</a>.</p>
+        </div>
+        <div>
+          <h3>Record and review</h3>
+          <p>Launch <code>lovelace-desktop.exe</code> on Windows or <code>./lovelace-desktop</code> on Linux. For a source build, launch the executable from <code>target/release/</code>. Select English, Portuguese, or Auto-detect, then record and stop to process the session.</p>
+          <p class="setup-next">To use the CLI, run <code>lovelace record --language en</code> from the folder containing <code>engines/</code> and <code>models/</code>. Invoke the binary by its path if needed. Add <code>--cpu</code> for CPU processing, or <code>--audio-only</code> to save a WAV without processing. Sessions are saved in <code>sessoes/</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="models" class="source-section" aria-labelledby="models-title">
+      <div class="section shell">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">LOCAL MODELS</p>
+            <h2 id="models-title">Bring your own model.</h2>
+          </div>
+          <p>Lovelace uses two local models. A Whisper model turns speech into text, and an instruction-tuned GGUF model turns the transcript into notes. Download them separately and choose a pair that fits your machine.</p>
+        </div>
+        <div class="setup-body run-guide">
+          <div>
+            <h3>Transcription with whisper.cpp</h3>
+            <p>Choose a multilingual Whisper <code>.bin</code> for English, Brazilian Portuguese, or auto-detection. Models with <code>.en</code> in the filename are English-only.</p>
+            <ul class="engine-list">
+              <li><a href="https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-base-q5_1.bin">Whisper Base</a><code>ggml-base-q5_1.bin · 59.7 MB</code><span>Try this when processing time matters most.</span></li>
+              <li><a href="https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-small-q5_1.bin">Whisper Small</a><code>ggml-small-q5_1.bin · 190 MB</code><span>The Lovelace default and a starting point for everyday recordings.</span></li>
+              <li><a href="https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-medium-q5_0.bin">Whisper Medium</a><code>ggml-medium-q5_0.bin · 539 MB</code><span>Try this if Small often misses words and you can spend more time transcribing.</span></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Summarization with llama.cpp</h3>
+            <p>Choose an instruction-tuned <code>.gguf</code> that llama.cpp can load with a chat template. Lovelace requests structured JSON to link notes to transcript segments.</p>
+            <ul class="engine-list">
+              <li><a href="https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/blob/main/qwen2.5-1.5b-instruct-q4_k_m.gguf">Qwen2.5 1.5B Instruct</a><code>Q4_K_M · 1.12 GB</code><span>A smaller download to try on a machine with limited memory. Apache 2.0.</span></li>
+              <li><a href="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/blob/main/qwen2.5-3b-instruct-q4_k_m.gguf">Qwen2.5 3B Instruct</a><code>Q4_K_M · 2.1 GB</code><span>The Lovelace default. The publisher lists it under the Qwen Research license.</span></li>
+              <li><a href="https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/tree/main">Qwen2.5 7B Instruct</a><code>Q4_K_M · about 4.68 GB across two files</code><span>A larger option to try for more detailed notes. Apache 2.0. Keep both files together and point <code>--llama-model</code> at the file ending in <code>00001-of-00002.gguf</code>.</span></li>
+            </ul>
+            <p class="setup-next">File sizes give you a starting point. Allow extra RAM or VRAM for processing and the context used during summarization.</p>
+          </div>
+          <div>
+            <h3>Choose model files</h3>
+            <p>The desktop app reads the default filenames in <a href="#run-locally">Local setup</a>. To select models by path, use <code>--whisper-model</code> and <code>--llama-model</code> in the CLI.</p>
+            <div class="command"><code>lovelace record --language pt --whisper-model models/ggml-base-q5_1.bin --llama-model models/qwen2.5-1.5b-instruct-q4_k_m.gguf</code><button class="copy-command" type="button">Copy</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <a class="brand" href="#top"><img src="assets/lovelace.png" width="30" height="30" alt=""> Lovelace</a>
+      <p class="footer-credit">developed by <a href="https://matheusdmm.dev">Matheus</a></p>
+      <a class="back-top" href="#top">Back to top <span aria-hidden="true">↑</span></a>
+    </div>
+  </footer>
+</body>
+</html>

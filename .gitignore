@@ -1,6 +1,16 @@
-project.md
+# Compilação e pacotes gerados
 /target/
+/gen/
+/lovelace-windows-x64.zip
+/lovelace-linux-x64.tar.gz
+
+# Dados e dependências locais
 /sessoes/
 /models/
 /engines/
-/gen/
+/project.md
+
+# Metadados do sistema operacional
+Thumbs.db
+Desktop.ini
+.DS_Store

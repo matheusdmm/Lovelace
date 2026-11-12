@@ -64,17 +64,19 @@ struct Message {
 pub fn generate(
     session: &Path,
     segments: &[Segment],
+    segment_anchor: &str,
     language: Language,
     options: &ProcessingOptions,
 ) -> Result<String> {
-    let mut markdown = String::from("# Síntese da gravação\n\n");
+    const HEADING: &str = "# Recording summary\n\n";
+    let mut markdown = String::from(HEADING);
     if segments.is_empty() {
-        markdown.push_str("Nenhum trecho de fala identificado.\n");
+        markdown.push_str("No speech segments found.\n");
         return Ok(markdown);
     }
 
     let batches = batches(segments);
-    println!("Carregando o modelo de síntese...");
+    println!("Loading the summary model...");
     let server = Server::start(session, options)?;
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .proxy(None)
@@ -89,7 +91,7 @@ pub fn generate(
         Language::Auto => "Write every title and idea in the primary language of the transcript.",
     };
     for (index, (first, batch)) in batches.iter().enumerate() {
-        println!("Gerando síntese ({}/{})...", index + 1, batches.len());
+        println!("Generating summary ({}/{})...", index + 1, batches.len());
         let input: Vec<_> = batch
             .iter()
             .enumerate()
@@ -97,11 +99,18 @@ pub fn generate(
             .collect();
         let summary = server.complete(&agent, language, &input)?;
         for note in summary.notes {
-            append_note(&mut markdown, note, *first, batch.len(), segments)?;
+            append_note(
+                &mut markdown,
+                note,
+                *first,
+                batch.len(),
+                segments,
+                segment_anchor,
+            )?;
         }
     }
-    if markdown == "# Síntese da gravação\n\n" {
-        markdown.push_str("Nenhum apontamento gerado para esta gravação.\n");
+    if markdown == HEADING {
+        markdown.push_str("No notes were generated for this recording.\n");
     }
     Ok(markdown)
 }
@@ -131,14 +140,15 @@ fn append_note(
     first: usize,
     count: usize,
     segments: &[Segment],
+    segment_anchor: &str,
 ) -> Result<()> {
     ensure!(
         !note.title.trim().is_empty() && !note.idea.trim().is_empty(),
-        "Apontamento vazio"
+        "Empty note"
     );
     ensure!(
         !note.segments.is_empty(),
-        "O modelo retornou um apontamento sem trechos"
+        "The model returned a note without segment references"
     );
 
     let mut seen = HashSet::new();
@@ -146,17 +156,17 @@ fn append_note(
     for id in note.segments {
         ensure!(
             (first..first + count).contains(&id),
-            "O modelo citou um trecho fora do bloco: {id}"
+            "The model cited segment {id} outside the current batch"
         );
         if seen.insert(id) {
             let time = segments[id - 1].start();
-            links.push(format!("[{time}](transcricao.md#trecho-{id:04})"));
+            links.push(format!("[{time}](transcricao.md#{segment_anchor}-{id:04})"));
         }
     }
 
     writeln!(
         markdown,
-        "## {}\n\n{}\n\nTrechos: {}\n",
+        "## {}\n\n{}\n\nSegments: {}\n",
         markdown_text(&note.title),
         markdown_text(&note.idea),
         links.join(" · ")
@@ -173,12 +183,12 @@ impl Server {
     fn start(session: &Path, options: &ProcessingOptions) -> Result<Self> {
         ensure!(
             options.llama.is_file(),
-            "llama-server ausente em {}",
+            "llama-server missing at {}",
             options.llama.display()
         );
         ensure!(
             options.modelo_llama.is_file(),
-            "Modelo de síntese ausente em {}",
+            "Summary model missing at {}",
             options.modelo_llama.display()
         );
         let port = TcpListener::bind(("127.0.0.1", 0))?.local_addr()?.port();
@@ -201,7 +211,7 @@ impl Server {
             .stdout(logs.try_clone()?)
             .stderr(logs.try_clone()?)
             .spawn()
-            .context("Não foi possível iniciar o llama-server")?;
+            .context("Could not start llama-server")?;
         let mut server = Self {
             child,
             url: format!("http://127.0.0.1:{port}"),
@@ -213,7 +223,7 @@ impl Server {
             }
             let tail = output.lines().rev().take(6).collect::<Vec<_>>();
             let tail = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
-            return Err(error).context(format!("Falha ao carregar o llama-server\n{tail}"));
+            return Err(error).context(format!("Could not load llama-server\n{tail}"));
         }
         Ok(server)
     }
@@ -229,18 +239,18 @@ impl Server {
         let deadline = Instant::now() + Duration::from_secs(120);
         while Instant::now() < deadline {
             if let Some(status) = self.child.try_wait()? {
-                bail!("O llama-server terminou com {status}");
+                bail!("llama-server exited with {status}");
             }
             match agent.get(&url).call() {
                 Ok(_) => return Ok(()),
                 Err(ureq::Error::Io(error)) if error.kind() == ErrorKind::PermissionDenied => {
-                    return Err(error).context("A conexão local com o llama-server foi bloqueada");
+                    return Err(error).context("The local connection to llama-server was blocked");
                 }
                 Err(_) => {}
             }
             thread::sleep(Duration::from_millis(250));
         }
-        bail!("Tempo limite ao carregar o modelo de síntese")
+        bail!("Timed out loading the summary model")
     }
 
     fn complete(&self, agent: &ureq::Agent, language: &str, input: &[Value]) -> Result<Summary> {
@@ -270,21 +280,21 @@ impl Server {
                     "additionalProperties": false
                 }}
             }))
-            .context("Falha na solicitação ao modelo de síntese")?
+            .context("Request to the summary model failed")?
             .body_mut()
             .read_json()
-            .context("Resposta do llama-server inválida")?;
+            .context("Invalid response from llama-server")?;
         let choice = response
             .choices
             .first()
-            .context("O llama-server não retornou uma resposta")?;
+            .context("llama-server returned no response")?;
         ensure!(
             choice.finish_reason == "stop",
-            "A síntese ficou incompleta ({})",
+            "The summary is incomplete ({})",
             choice.finish_reason
         );
         serde_json::from_str(&choice.message.content)
-            .context("O modelo não retornou os apontamentos em JSON")
+            .context("The model did not return notes in JSON")
     }
 }
 
@@ -292,5 +302,86 @@ impl Drop for Server {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn segment(from: u64, text: &str) -> Segment {
+        serde_json::from_value(json!({
+            "offsets": {"from": from, "to": from + 100},
+            "text": text,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn batches_keep_segment_ids_when_splitting_the_transcript() {
+        let long_text = "a".repeat(BATCH_BYTES / 2);
+        let segments = [
+            segment(0, &long_text),
+            segment(100, &long_text),
+            segment(200, "Final"),
+        ];
+
+        let batches = batches(&segments);
+        let ranges: Vec<_> = batches
+            .iter()
+            .map(|(first, batch)| (*first, batch.len()))
+            .collect();
+
+        assert_eq!(ranges, [(1, 1), (2, 2)]);
+        assert_eq!(batches[1].1[1].text, "Final");
+    }
+
+    #[test]
+    fn summary_links_to_the_cited_segments_once_each() -> Result<()> {
+        let segments = [
+            segment(0, "Introdução"),
+            segment(1_234, "Ideia"),
+            segment(2_345, "Exemplo"),
+        ];
+        for anchor in ["segment", "trecho"] {
+            let note = Note {
+                title: "Ideia *principal*".into(),
+                idea: "A ideia inclui um exemplo.".into(),
+                segments: vec![2, 2, 3],
+            };
+            let mut markdown = String::new();
+
+            append_note(&mut markdown, note, 2, 2, &segments, anchor)?;
+
+            assert_eq!(
+                markdown,
+                format!(
+                    "## Ideia \\*principal\\*\n\nA ideia inclui um exemplo.\n\n\
+                     Segments: [00:00:01.234](transcricao.md#{anchor}-0002) · \
+                     [00:00:02.345](transcricao.md#{anchor}-0003)\n\n"
+                )
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn summary_rejects_references_to_other_batches() {
+        let segments = [segment(0, "Primeiro bloco"), segment(100, "Segundo bloco")];
+        let note = Note {
+            title: "Ideia".into(),
+            idea: "Uma observação.".into(),
+            segments: vec![2, 1],
+        };
+        let mut markdown = String::new();
+
+        let error = append_note(&mut markdown, note, 2, 1, &segments, "segment").unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("segment 1 outside the current batch")
+        );
+        assert!(markdown.is_empty());
     }
 }
