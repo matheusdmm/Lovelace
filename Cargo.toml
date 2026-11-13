@@ -2,7 +2,7 @@
 name = "lovelace"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.90"
 default-run = "lovelace"
 
 [[bin]]
@@ -26,4 +26,4 @@ pulldown-cmark = { version = "0.13", default-features = false, features = ["html
 tauri = { version = "2", features = ["protocol-asset"], optional = true }
 
 [build-dependencies]
-tauri-build = { version = "2", optional = true }
+tauri-build = { version = "2.7.1", optional = true }

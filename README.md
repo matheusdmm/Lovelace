@@ -17,7 +17,7 @@ The Windows desktop app requires Microsoft Edge WebView2 Runtime. On Linux, the 
 
 ## Requirements
 
-- On Windows, build with Rust 1.89 or later, the `stable-x86_64-pc-windows-gnu` toolchain and x64 MinGW-w64 (`gcc.exe` on `PATH`).
+- On Windows, build with Rust 1.90 or later, the `stable-x86_64-pc-windows-gnu` toolchain and x64 MinGW-w64 (`gcc.exe` on `PATH`).
 - On Linux, use the native `stable` toolchain and install the build dependencies listed in the workflow.
 - For transcription and summarization, install the engines for your platform, their libraries and the models at the paths below.
 
