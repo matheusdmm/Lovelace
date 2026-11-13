@@ -1,6 +1,6 @@
 FROM nginxinc/nginx-unprivileged:stable-alpine
 
-COPY index.html styles.css app.js repository.js /usr/share/nginx/html/
+COPY index.html styles.css app.js repository.js theme.js /usr/share/nginx/html/
 COPY assets/ /usr/share/nginx/html/assets/
 
 EXPOSE 8080

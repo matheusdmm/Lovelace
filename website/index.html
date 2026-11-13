@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Lovelace is a local AI companion for thinking out loud. Record your ideas and get a timestamped transcript and linked Markdown notes.">
+  <meta name="description" content="Lovelace turns recordings into timestamped transcripts, linked Markdown notes, and SRT captions for audio, video, and OBS Studio recordings. Processing stays on your machine.">
   <meta name="theme-color" content="#f8f6f0">
+  <script src="theme.js"></script>
   <title>Lovelace — Think out loud.</title>
   <link rel="icon" href="assets/lovelace.png" type="image/png">
   <link rel="stylesheet" href="styles.css">
@@ -18,11 +19,20 @@
       <a class="brand" href="#top"><img src="assets/lovelace.png" width="30" height="30" alt=""> Lovelace</a>
       <nav aria-label="Main navigation">
         <a href="#workflow">How it works</a>
+        <a href="#captions">Captions</a>
         <a href="#use-cases">Who it’s for</a>
-        <a href="#models">Models</a>
         <a href="#source">Source</a>
+        <a href="#build-from-source">Build</a>
+        <a href="#run-locally">Setup</a>
+        <a href="#models">Models</a>
       </nav>
-      <a class="header-cta" href="#get-started">Get started <span aria-hidden="true">↗</span></a>
+      <div class="header-actions">
+        <button class="theme-toggle" type="button" aria-label="Dark theme" title="Dark theme" hidden>
+          <span class="theme-moon" aria-hidden="true">☾</span>
+          <span class="theme-sun" aria-hidden="true">☼</span>
+        </button>
+        <a class="header-cta" href="#get-started">Get started <span aria-hidden="true">↗</span></a>
+      </div>
     </div>
   </header>
 
@@ -32,7 +42,7 @@
         <div class="hero-copy">
           <p class="eyebrow"><span class="signal-dot" aria-hidden="true"></span> YOUR LOCAL AI COMPANION</p>
           <h1 id="hero-title">Think out<br><em>loud.</em></h1>
-          <p class="hero-description">Follow a tangent. Rehearse a talk. Say the half-formed thing. Lovelace turns your voice into a transcript and notes you can come back to.</p>
+          <p class="hero-description">Follow a tangent. Rehearse a talk. Lovelace turns your voice into linked notes and gives your finished recordings captions you can publish.</p>
           <div class="hero-actions">
             <a class="button button-primary" href="#get-started">Get started <span aria-hidden="true">↗</span></a>
             <a class="button button-secondary" href="#workflow">See how it works <span aria-hidden="true">↓</span></a>
@@ -51,6 +61,7 @@
       <div class="shell product-meta">
         <span><span class="meta-mark" aria-hidden="true">◈</span> Runs on your machine</span>
         <span><span class="meta-mark" aria-hidden="true">↓</span> Saves as Markdown</span>
+        <a href="#captions"><span class="meta-mark" aria-hidden="true">▤</span> Exports SRT captions</a>
         <span><span class="meta-mark" aria-hidden="true">⊞</span> Windows &amp; Linux</span>
       </div>
     </section>
@@ -73,6 +84,34 @@
       </figure>
     </section>
 
+    <section id="captions" class="section shell" aria-labelledby="captions-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">CAPTIONS</p>
+          <h2 id="captions-title">Give your recordings subtitles.</h2>
+        </div>
+        <p>Turn a talk, podcast, or screen recording into a timestamped SRT file. Choose English, Portuguese, or auto-detect and pick the audio track you want to caption.</p>
+      </div>
+      <div class="setup-body run-guide">
+        <div>
+          <h3>From the desktop app</h3>
+          <p>Open <strong>Create captions</strong>, drop a video or audio file into the window or paste its path, then select <strong>Generate SRT</strong>. Lovelace saves the subtitles alongside the recording and preserves the original media and any existing subtitle file.</p>
+        </div>
+        <div>
+          <h3>After an OBS Studio recording</h3>
+          <p>In OBS Studio 29 or later, open <strong>Tools → Scripts</strong> and add <code>lovelace_captions.py</code> from the Lovelace archive or the source checkout’s <code>obs/</code> folder. Configure Python under <strong>Python Settings</strong> if your OBS build requires it.</p>
+          <p class="setup-next">Set <strong>Lovelace CLI</strong> to the executable and choose your language and audio track. For a source build, set <strong>Folder containing engines and models</strong> to the repository root. With <strong>Generate captions after recording</strong> enabled, the script writes the SRT in the background after you stop recording. For split recordings, it captions the last file OBS reports. See the <a href="https://docs.obsproject.com/scripting">OBS scripting guide</a>.</p>
+        </div>
+        <div>
+          <h3>From the command line</h3>
+          <p>Run the CLI from the folder containing <code>engines/</code> and <code>models/</code>. Audio tracks start at 1. Pass <code>--output</code> to choose a different SRT path.</p>
+          <div class="command"><code>lovelace captions "recording.mkv" --language pt --audio-track 1</code><button class="copy-command" type="button">Copy</button></div>
+          <p class="copy-status" role="status"></p>
+        </div>
+        <p>Captions run on your machine with <a href="#caption-requirements">FFmpeg and Whisper</a>.</p>
+      </div>
+    </section>
+
     <section id="use-cases" class="use-cases" aria-labelledby="audience-title">
       <div class="shell section">
         <div class="section-heading">
@@ -85,35 +124,10 @@
         <dl class="audience-list">
           <div><dt>Speakers</dt><dd>Rehearse a talk and go back to the moments where the story lands.</dd></div>
           <div><dt>Artists &amp; writers</dt><dd>Talk through a sketch, an essay, or a scene and keep the lines you want to build on.</dd></div>
-          <div><dt>Podcasters</dt><dd>Talk through an episode angle and pull the strongest beats into your outline.</dd></div>
+          <div><dt>Podcasters</dt><dd>Talk through an episode angle, then generate subtitles for the finished recording.</dd></div>
+          <div><dt>Video creators</dt><dd>Caption a finished OBS recording using the audio track that carries your voice.</dd></div>
           <div><dt>Verbal thinkers</dt><dd>Follow an idea wherever it goes and give yourself something to pick up tomorrow.</dd></div>
         </dl>
-      </div>
-    </section>
-
-    <section id="get-started" class="section shell" aria-labelledby="download-title">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">DOWNLOAD</p>
-          <h2 id="download-title">Get Lovelace.</h2>
-        </div>
-        <p>Each x64 archive contains the desktop app and CLI. Install the local engines and models after extracting it.</p>
-      </div>
-      <ul class="download-list">
-        <li>
-          <div><strong>Windows x64</strong><code>lovelace-windows-x64.zip</code></div>
-          <span data-link-placeholder="windows">Download coming soon</span>
-          <a class="button button-secondary" data-repository-link="windows" hidden>Download for Windows <span aria-hidden="true">↓</span></a>
-        </li>
-        <li>
-          <div><strong>Linux x64</strong><code>lovelace-linux-x64.tar.gz</code></div>
-          <span data-link-placeholder="linux">Download coming soon</span>
-          <a class="button button-secondary" data-repository-link="linux" hidden>Download for Linux <span aria-hidden="true">↓</span></a>
-        </li>
-      </ul>
-      <div class="section-links">
-        <a href="#build-from-source">Build from source ↓</a>
-        <a href="#run-locally">Set up and run ↓</a>
       </div>
     </section>
 
@@ -130,6 +144,7 @@
           <div><dt>Capture</dt><dd><code>src/audio.rs</code> writes microphone input to a local WAV file.</dd></div>
           <div><dt>Transcription</dt><dd><code>src/pipeline.rs</code> runs Whisper and saves timestamped segments as Markdown.</dd></div>
           <div><dt>Summarization</dt><dd><code>src/synthesis.rs</code> calls a local llama.cpp server at <code>127.0.0.1</code> and writes notes with source timestamps.</dd></div>
+          <div><dt>Captions</dt><dd><code>src/captions.rs</code> extracts an audio track with FFmpeg and writes an SRT from Whisper timestamps. <code>obs/lovelace_captions.py</code> calls the CLI when OBS finishes recording.</dd></div>
           <div><dt>Builds</dt><dd><code>.github/workflows/build.yml</code> shows how the Windows and Linux binaries are tested and packaged.</dd></div>
         </dl>
         <p class="source-status" data-link-placeholder="source">Source repository link coming soon.</p>
@@ -182,6 +197,7 @@ cargo +stable build --locked --release --features desktop --bins</code><button c
           <p>On Windows, install <a href="https://developer.microsoft.com/en-us/microsoft-edge/webview2/">Microsoft Edge WebView2 Runtime</a> and keep the loader DLL beside the app. On Ubuntu 24.04, install the system libraries used by the CLI and desktop app.</p>
           <div class="command"><code>sudo apt-get update
 sudo apt-get install libasound2t64 libwebkit2gtk-4.1-0 libxdo3 libayatana-appindicator3-1 librsvg2-2</code><button class="copy-command" type="button">Copy</button></div>
+          <p class="copy-status" role="status"></p>
         </div>
         <div>
           <h3>Add the engines and models</h3>
@@ -193,6 +209,10 @@ sudo apt-get install libasound2t64 libwebkit2gtk-4.1-0 libxdo3 libayatana-appind
             <li><a href="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/blob/main/qwen2.5-3b-instruct-q4_k_m.gguf">Qwen2.5 3B Instruct</a><code>models/qwen2.5-3b-instruct-q4_k_m.gguf</code><span>Download the Q4_K_M GGUF for summarization.</span></li>
           </ul>
           <p class="setup-next"><a href="#models">Compare models and use your own files</a>.</p>
+        </div>
+        <div id="caption-requirements">
+          <h3>Install FFmpeg for captions</h3>
+          <p>Install <a href="https://ffmpeg.org/download.html">FFmpeg</a> on your <code>PATH</code> and set up the Whisper engine and model listed above. Captions use FFmpeg and Whisper. Markdown summaries also use llama.cpp and a GGUF model. Restart Lovelace or OBS if it was open when you updated <code>PATH</code>. In the CLI, use <code>--ffmpeg</code> to specify a custom executable.</p>
         </div>
         <div>
           <h3>Record and review</h3>
@@ -209,7 +229,7 @@ sudo apt-get install libasound2t64 libwebkit2gtk-4.1-0 libxdo3 libayatana-appind
             <p class="eyebrow">LOCAL MODELS</p>
             <h2 id="models-title">Bring your own model.</h2>
           </div>
-          <p>Lovelace uses two local models. A Whisper model turns speech into text, and an instruction-tuned GGUF model turns the transcript into notes. Download them separately and choose a pair that fits your machine.</p>
+          <p>Lovelace uses Whisper for transcripts and captions, and an instruction-tuned GGUF model for notes. Download the models you need and choose sizes that fit your machine.</p>
         </div>
         <div class="setup-body run-guide">
           <div>
@@ -233,9 +253,38 @@ sudo apt-get install libasound2t64 libwebkit2gtk-4.1-0 libxdo3 libayatana-appind
           </div>
           <div>
             <h3>Choose model files</h3>
-            <p>The desktop app reads the default filenames in <a href="#run-locally">Local setup</a>. To select models by path, use <code>--whisper-model</code> and <code>--llama-model</code> in the CLI.</p>
+            <p>The desktop app reads the default filenames in <a href="#run-locally">Local setup</a>. For <code>record</code> and <code>process</code>, use <code>--whisper-model</code> and <code>--llama-model</code> to select files by path. For <code>captions</code>, use <code>--whisper-model</code>.</p>
             <div class="command"><code>lovelace record --language pt --whisper-model models/ggml-base-q5_1.bin --llama-model models/qwen2.5-1.5b-instruct-q4_k_m.gguf</code><button class="copy-command" type="button">Copy</button></div>
+            <p class="copy-status" role="status"></p>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="get-started" class="download-section" aria-labelledby="download-title">
+      <div class="section shell">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">DOWNLOAD</p>
+            <h2 id="download-title">Get Lovelace.</h2>
+          </div>
+          <p>Each x64 archive contains the desktop app, CLI, and OBS caption script. Install the local engines and models after extracting it.</p>
+        </div>
+        <ul class="download-list">
+          <li>
+            <div><strong>Windows x64</strong><code>lovelace-windows-x64.zip</code></div>
+            <span data-link-placeholder="windows">Download coming soon</span>
+            <a class="button button-secondary" data-repository-link="windows" hidden>Download for Windows <span aria-hidden="true">↓</span></a>
+          </li>
+          <li>
+            <div><strong>Linux x64</strong><code>lovelace-linux-x64.tar.gz</code></div>
+            <span data-link-placeholder="linux">Download coming soon</span>
+            <a class="button button-secondary" data-repository-link="linux" hidden>Download for Linux <span aria-hidden="true">↓</span></a>
+          </li>
+        </ul>
+        <div class="section-links">
+          <a href="#build-from-source">Build from source <span aria-hidden="true">↑</span></a>
+          <a href="#run-locally">Set up and run <span aria-hidden="true">↑</span></a>
         </div>
       </div>
     </section>

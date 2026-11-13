@@ -194,6 +194,7 @@ impl Server {
         let port = TcpListener::bind(("127.0.0.1", 0))?.local_addr()?.port();
         let mut logs = tempfile::tempfile_in(session)?;
         let child = options
+            .transcription
             .engine_command(options.llama.canonicalize()?)
             .arg("--host")
             .arg("127.0.0.1")
@@ -206,7 +207,7 @@ impl Server {
             .arg("--parallel")
             .arg("1")
             .arg("--gpu-layers")
-            .arg(if options.cpu { "0" } else { "99" })
+            .arg(if options.transcription.cpu { "0" } else { "99" })
             .stdin(Stdio::null())
             .stdout(logs.try_clone()?)
             .stderr(logs.try_clone()?)

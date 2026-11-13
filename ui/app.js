@@ -20,6 +20,12 @@ const buttons = [...document.querySelectorAll("[data-document]")];
 const record = byId("record");
 const recordLabel = byId("record-label");
 const language = byId("language");
+const captionMedia = byId("caption-media");
+const captionLanguage = byId("caption-language");
+const captionTrack = byId("caption-track");
+const captionSubmit = byId("generate-captions");
+const captionStatus = byId("caption-status");
+const captionOutput = byId("caption-output");
 const retry = byId("retry");
 const copy = byId("copy");
 const audio = byId("audio");
@@ -44,6 +50,7 @@ const phases = {
   recording: "Recording",
   saving: "Saving audio",
   preparing: "Preparing session",
+  extracting: "Extracting audio",
   transcribing: "Transcribing",
   synthesizing: "Generating summary",
   done: "Session ready",
@@ -71,7 +78,8 @@ function showView(view, opener) {
   workspace.dataset.view = view;
   workspace.scrollTop = 0;
   back.hidden = view === "dashboard";
-  activeJob.hidden = !isBusy() || view === "dashboard" || view === "record";
+  activeJob.hidden = !isBusy() || view === activeJob.dataset.viewTarget
+    || (view === "dashboard" && activeJob.dataset.viewTarget === "record");
 
   const heading = {
     dashboard: dashboardOpener?.isConnected ? dashboardOpener : byId("studio-heading"),
@@ -79,6 +87,7 @@ function showView(view, opener) {
     history: byId("history-heading"),
     documents: selected ? byId("session-title") : byId("empty-title"),
     audio: byId("audio-heading"),
+    captions: byId("captions-heading"),
   }[view];
   heading.focus({ preventScroll: true });
 }
@@ -302,19 +311,31 @@ function renderStatus(state) {
   phase = state.phase;
   toolbar.dataset.phase = phase;
   const view = workspace.dataset.view;
-  activeJob.hidden = !isBusy() || view === "dashboard" || view === "record";
+  const jobView = state.captions ? "captions" : "record";
+  activeJob.dataset.viewTarget = jobView;
+  activeJob.hidden = !isBusy() || view === jobView || (!state.captions && view === "dashboard");
   activeJob.textContent = phases[phase];
   recordLabel.textContent = recording ? "Stop" : "Record";
   record.dataset.recording = String(recording);
   record.disabled = pendingCommand || (isBusy() && !recording);
   language.disabled = pendingCommand || isBusy();
   retry.disabled = pendingCommand || isBusy();
+  const captionBusy = state.captions && isBusy();
+  captionMedia.disabled = captionBusy;
+  captionLanguage.disabled = captionBusy;
+  captionTrack.disabled = captionBusy;
+  captionSubmit.disabled = pendingCommand || isBusy();
+  if (state.captions) {
+    captionStatus.textContent = state.error || (state.subtitle_path ? "Subtitles saved." : phases[phase]);
+    captionOutput.hidden = !state.subtitle_path;
+    captionOutput.value = state.subtitle_path || "";
+  }
   if (phase === "starting") elapsed.textContent = "00:00";
   if (recording) {
     elapsed.textContent = clock((performance.now() - recordingSince) / 1000);
   }
   renderSignal(recording, state.level);
-  if (!selected && changed) {
+  if (!state.captions && !selected && changed) {
     byId("empty-title").textContent = isBusy() ? phases[phase] : "Your first recording";
     byId("empty-description").textContent = recording
       ? "Select Stop to save the audio and start processing."
@@ -336,8 +357,8 @@ async function poll(force = false) {
     if (isBusy()) {
       pollTimeout = setTimeout(poll, phase === "recording" ? 120 : 420);
     } else if (force || previous !== phase || !selected) {
-      if (state.error) showMessage(state.error);
-      await refreshHistory(state.session);
+      if (state.error && !state.captions) showMessage(state.error);
+      if (!state.captions || !selected) await refreshHistory(state.session);
     }
   } catch (error) {
     showMessage(String(error));
@@ -351,6 +372,7 @@ async function command(name, args) {
   record.disabled = true;
   retry.disabled = true;
   language.disabled = true;
+  captionSubmit.disabled = true;
   clearTimeout(pollTimeout);
   showMessage();
   let submitted = false;
@@ -380,6 +402,14 @@ history.addEventListener("click", (event) => {
 record.addEventListener("click", () => {
   if (phase === "recording") void command("stop_recording");
   else if (!isBusy()) void command("start_recording", { language: language.value });
+});
+byId("captions-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const media = captionMedia.value.trim().replace(/^"(.*)"$/, "$1");
+  if (!media || isBusy() || pendingCommand) return;
+  void command("generate_captions", {
+    media, language: captionLanguage.value, audioTrack: Number(captionTrack.value),
+  });
 });
 retry.addEventListener("click", () => {
   if (selected && !isBusy()) void command("retry", { id: selected.id, language: language.value });
@@ -416,5 +446,15 @@ void window.__TAURI__.event.listen("session-active", () => {
   showMessage(phase === "recording"
     ? "Stop recording before closing Lovelace."
     : "Wait for the session to finish before closing Lovelace.");
+}).catch((error) => console.error(error));
+void window.__TAURI__.webview.getCurrentWebview().onDragDropEvent(({ payload }) => {
+  if (payload.type !== "drop" || workspace.dataset.view !== "captions" || captionMedia.disabled) return;
+  if (payload.paths.length !== 1) {
+    showMessage("Drop one media file at a time.");
+    return;
+  }
+  showMessage();
+  captionMedia.value = payload.paths[0];
+  captionMedia.focus();
 }).catch((error) => console.error(error));
 void poll();

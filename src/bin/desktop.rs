@@ -13,7 +13,9 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail, ensure};
-use lovelace::{Language, ProcessingOptions, audio, new_session, pipeline};
+use lovelace::{
+    Language, ProcessingOptions, TranscriptionOptions, audio, captions, new_session, pipeline,
+};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd, html};
 use serde::Serialize;
 use tauri::{Emitter, Manager, State, WindowEvent};
@@ -27,6 +29,7 @@ enum Phase {
     Recording,
     Saving,
     Preparing,
+    Extracting,
     Transcribing,
     Synthesizing,
     Done,
@@ -45,6 +48,8 @@ struct Status {
     session: Option<String>,
     error: Option<String>,
     level: f32,
+    captions: bool,
+    subtitle_path: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -87,13 +92,24 @@ impl Desktop {
         phase: Phase,
         task: impl FnOnce(&Mutex<Job>) -> Result<()> + Send + 'static,
     ) -> Result<()> {
+        self.launch_job(
+            Status {
+                phase,
+                ..Status::default()
+            },
+            task,
+        )
+    }
+
+    fn launch_job(
+        &self,
+        status: Status,
+        task: impl FnOnce(&Mutex<Job>) -> Result<()> + Send + 'static,
+    ) -> Result<()> {
         let mut job = self.job.lock().unwrap();
         ensure!(!job.status.phase.busy(), "A session is already in progress");
         let previous = job.status.clone();
-        job.status = Status {
-            phase,
-            ..Status::default()
-        };
+        job.status = status;
         self.level.store(0, Ordering::Relaxed);
 
         let shared = Arc::clone(&self.job);
@@ -281,6 +297,42 @@ fn process(job: &Mutex<Job>, session: &Path, options: &ProcessingOptions) -> Res
 }
 
 #[tauri::command]
+fn generate_captions(
+    media: PathBuf,
+    language: String,
+    audio_track: u32,
+    state: State<'_, Desktop>,
+) -> Result<(), String> {
+    let language = selected_language(Some(&language)).map_err(error_message)?;
+    let transcription = TranscriptionOptions::desktop(&state.root, language);
+    state
+        .launch_job(
+            Status {
+                phase: Phase::Extracting,
+                captions: true,
+                ..Status::default()
+            },
+            move |job| {
+                let subtitle = captions::generate(
+                    &media,
+                    None,
+                    &captions::MediaOptions::new(audio_track),
+                    &transcription,
+                    |stage| {
+                        job.lock().unwrap().status.phase = match stage {
+                            captions::Stage::Extracting => Phase::Extracting,
+                            captions::Stage::Transcribing => Phase::Transcribing,
+                        };
+                    },
+                )?;
+                job.lock().unwrap().status.subtitle_path = Some(subtitle);
+                Ok(())
+            },
+        )
+        .map_err(error_message)
+}
+
+#[tauri::command]
 fn start_recording(language: String, state: State<'_, Desktop>) -> Result<(), String> {
     let language = selected_language(Some(&language)).map_err(error_message)?;
     let options = ProcessingOptions::desktop(&state.root, language);
@@ -377,6 +429,7 @@ fn main() {
             status,
             start_recording,
             stop_recording,
+            generate_captions,
             retry
         ])
         .run(tauri::generate_context!())

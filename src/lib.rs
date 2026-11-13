@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod captions;
 pub mod pipeline;
 mod synthesis;
 
@@ -28,20 +29,26 @@ const MODEL_LLAMA: &str = "models/qwen2.5-3b-instruct-q4_k_m.gguf";
 
 #[derive(Args)]
 pub struct ProcessingOptions {
+    #[command(flatten)]
+    pub transcription: TranscriptionOptions,
+    #[arg(long, default_value = LLAMA)]
+    llama: PathBuf,
+    #[arg(long = "llama-model", alias = "modelo-llama", default_value = MODEL_LLAMA)]
+    modelo_llama: PathBuf,
+}
+
+#[derive(Args)]
+pub struct TranscriptionOptions {
     /// Spoken language. Defaults to pt for new recordings.
     #[arg(long = "language", alias = "idioma", value_enum)]
     pub idioma: Option<Language>,
-    /// Use the CPU for transcription and summarization.
+    /// Use the CPU for model inference.
     #[arg(long)]
     cpu: bool,
     #[arg(long, default_value = WHISPER)]
     whisper: PathBuf,
     #[arg(long = "whisper-model", alias = "modelo-whisper", default_value = MODEL_WHISPER)]
     modelo_whisper: PathBuf,
-    #[arg(long, default_value = LLAMA)]
-    llama: PathBuf,
-    #[arg(long = "llama-model", alias = "modelo-llama", default_value = MODEL_LLAMA)]
-    modelo_llama: PathBuf,
     #[cfg(windows)]
     #[arg(skip)]
     hide_engine_windows: bool,
@@ -67,12 +74,20 @@ impl Language {
 impl ProcessingOptions {
     pub fn desktop(root: &Path, idioma: Option<Language>) -> Self {
         Self {
+            transcription: TranscriptionOptions::desktop(root, idioma),
+            llama: root.join(LLAMA),
+            modelo_llama: root.join(MODEL_LLAMA),
+        }
+    }
+}
+
+impl TranscriptionOptions {
+    pub fn desktop(root: &Path, idioma: Option<Language>) -> Self {
+        Self {
             idioma,
             cpu: false,
             whisper: root.join(WHISPER),
             modelo_whisper: root.join(MODEL_WHISPER),
-            llama: root.join(LLAMA),
-            modelo_llama: root.join(MODEL_LLAMA),
             #[cfg(windows)]
             hide_engine_windows: true,
         }

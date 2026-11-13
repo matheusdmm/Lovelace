@@ -55,13 +55,14 @@ jobs:
             'target/release/lovelace.exe'
             'target/release/lovelace-desktop.exe'
             'target/release/WebView2Loader.dll'
+            'obs/lovelace_captions.py'
           ) -DestinationPath '${{ matrix.archive }}'
 
       - name: Package Linux binaries
         if: runner.os == 'Linux'
         run: |
           ./target/release/lovelace --version
-          tar -czf "${{ matrix.archive }}" -C target/release lovelace lovelace-desktop
+          tar -czf "${{ matrix.archive }}" -C target/release lovelace lovelace-desktop -C ../../obs lovelace_captions.py
 
       - uses: actions/upload-artifact@v7
         with:

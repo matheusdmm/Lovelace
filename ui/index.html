@@ -44,6 +44,9 @@
                 <button type="button" class="studio-link" data-view-target="record">
                     Open recorder <span aria-hidden="true">↗</span>
                 </button>
+                <button type="button" class="studio-link" data-view-target="captions">
+                    Create captions <span aria-hidden="true">↗</span>
+                </button>
             </div>
             <div class="toolbar" aria-label="Recorder">
                 <div class="record-status">
@@ -69,6 +72,33 @@
                             id="record-label">Record</b></button>
                 </div>
             </div>
+        </section>
+
+        <section class="captions-panel panel" aria-labelledby="captions-heading">
+            <header class="panel-header">
+                <h2 id="captions-heading" tabindex="-1">Create captions</h2>
+            </header>
+            <form id="captions-form">
+                <label for="caption-media">Media file</label>
+                <input id="caption-media" type="text" placeholder="Drop a file here or paste its path" required>
+                <div class="caption-controls">
+                    <div class="language-control">
+                        <label for="caption-language">Spoken language</label>
+                        <select id="caption-language">
+                            <option value="pt">Portuguese</option>
+                            <option value="en">English</option>
+                            <option value="auto">Auto-detect</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="caption-track">Audio track</label>
+                        <input id="caption-track" type="number" min="1" max="4294967295" value="1" required>
+                    </div>
+                    <button type="submit" id="generate-captions" class="secondary">Generate SRT</button>
+                </div>
+            </form>
+            <p id="caption-status" role="status">The SRT is saved next to the media file.</p>
+            <input id="caption-output" type="text" aria-label="Saved subtitle path" readonly hidden>
         </section>
 
         <section class="history-panel panel" aria-labelledby="history-heading">

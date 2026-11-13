@@ -1,6 +1,6 @@
 # Lovelace
 
-Lovelace is an idea recorder for Windows and Linux that produces transcripts and summaries in Markdown. Audio and inference stay on your machine. Each summary note links to the transcript segments that support it.
+Lovelace is an idea recorder for Windows and Linux that produces transcripts and summaries in Markdown. Each summary note links to the transcript segments that support it. Lovelace also generates timestamped SRT subtitles from video and audio files, including finished OBS Studio recordings. Media processing and inference stay on your machine.
 
 The [Lovelace website](website/) includes downloads, an audit guide, and instructions for building and running the app. See the [website README](website/README.md) for the Coolify configuration, Docker commands, and release link settings.
 
@@ -10,8 +10,8 @@ The [Build binaries workflow](.github/workflows/build.yml) runs on pushes and pu
 
 | x64 artifact | Contents |
 | --- | --- |
-| `lovelace-windows-x64.zip` | `lovelace.exe`, `lovelace-desktop.exe` and `WebView2Loader.dll` |
-| `lovelace-linux-x64.tar.gz` | `lovelace` and `lovelace-desktop`, built on Ubuntu 24.04 |
+| `lovelace-windows-x64.zip` | `lovelace.exe`, `lovelace-desktop.exe`, `WebView2Loader.dll` and `lovelace_captions.py` |
+| `lovelace-linux-x64.tar.gz` | `lovelace`, `lovelace-desktop` and `lovelace_captions.py`, built on Ubuntu 24.04 |
 
 The Windows desktop app requires Microsoft Edge WebView2 Runtime. On Linux, the binaries use ALSA and the desktop app also requires WebKitGTK 4.1. Extract the archive and run the CLI from the extracted directory. Install the engines and models separately in that directory.
 
@@ -34,7 +34,7 @@ On Linux, install the native executables at `engines/whisper/Release/whisper-cli
 
 ## Bring your own model
 
-Lovelace uses two local models. Choose a multilingual Whisper `.bin` for English and Brazilian Portuguese transcription and an instruction-tuned GGUF for summarization. The desktop app reads the default paths above. The CLI accepts custom paths on both `record` and `process`.
+Lovelace uses a multilingual Whisper `.bin` for transcription and captions, and an instruction-tuned GGUF for summarization. The desktop app reads the default paths above. The CLI accepts custom model paths on `record` and `process`. Use `--whisper-model` to select a custom model for `captions`.
 
 ```sh
 lovelace record --language pt --whisper-model models/ggml-base-q5_1.bin --llama-model models/qwen2.5-1.5b-instruct-q4_k_m.gguf
@@ -59,6 +59,37 @@ On Linux, use `cargo +stable run --release --features desktop --bin lovelace-des
 - **Documents and audio**. Open a session to switch between **Summary** and **Transcript**, copy the original Markdown or play the WAV file. Select a timestamp in the summary to open its transcript segment and seek to that point in the audio.
 - **Reprocessing**. Select **Process session** to resume processing a session that has no summary. While a recording or processing job is active, the header shows its status in the history, documents and audio views.
 
+## Captions
+
+Install [FFmpeg](https://ffmpeg.org/download.html) on `PATH` and set up the Whisper engine and model from [Requirements](#requirements). The caption pipeline uses FFmpeg to extract audio and Whisper to transcribe it with timestamps. If Lovelace or OBS was open when you updated `PATH`, restart it.
+
+By default, Lovelace saves the SRT next to the input, so `recording.mkv` produces `recording.srt`. It preserves the original media and any existing SRT. Move or rename the old SRT to regenerate it, or choose another destination from the CLI.
+
+### From the desktop app
+
+1. Open **Create captions** on the dashboard.
+2. Drop a video or audio file into the window, or paste its path into **Media file**.
+3. Choose **Portuguese**, **English**, or **Auto-detect** under **Spoken language**. **Audio track** defaults to 1 and follows the order of the audio tracks in the file.
+4. Select **Generate SRT**. The app displays the subtitle path when it finishes.
+
+### From OBS Studio
+
+1. In OBS Studio 29 or later, open **Tools → Scripts**. If your OBS build requires it, configure a compatible Python installation under **Python Settings**. [OBS scripting guide](https://docs.obsproject.com/scripting)
+2. Add [lovelace_captions.py](obs/lovelace_captions.py) and set **Lovelace CLI** to `lovelace.exe` on Windows or `lovelace` on Linux.
+3. If you built Lovelace from source and selected the executable under `target/release`, set **Folder containing engines and models** to the repository root. If you extracted a release and installed the engines and models beside the executable, leave this field empty.
+4. Select the spoken language and audio track, and leave **Generate captions after recording** enabled. Stop a recording to start caption generation in the background. Check **Script Log** for the result.
+
+If OBS splits a recording across multiple files, the script captions the last file reported by OBS. Live captions and direct capture from an OBS audio source are outside the current workflow.
+
+### From the command line
+
+```sh
+lovelace captions "recording.mkv" --language pt --audio-track 1
+lovelace captions "interview.wav" --language auto --output "interview-captions.srt"
+```
+
+Run the CLI from the folder containing `engines/` and `models/` when using the default paths. Use `--ffmpeg` to point to an FFmpeg executable outside `PATH`.
+
 ## CLI
 
 ```powershell
@@ -80,7 +111,7 @@ Run the suite from the project root on Windows.
 cargo test --locked --release --features desktop
 ```
 
-On Linux, use `cargo +stable test --locked --release --features desktop` with the build dependencies listed in the workflow. The suite covers CLI commands, session processing and retries, summary references, and the desktop backend for history and Markdown. It uses temporary sessions with generated WAV files and fixed Whisper results, so it runs without a microphone or models. The build workflow runs the suite on both platforms before packaging.
+On Linux, use `cargo +stable test --locked --release --features desktop` with the build dependencies listed in the workflow. The suite covers CLI commands, session processing and retries, summary references, the desktop backend for history and Markdown, SRT timing, and preservation of existing subtitles. It uses temporary sessions with generated WAV files and fixed Whisper results, so it runs without a microphone or models. The build workflow runs the suite on both platforms before packaging.
 
 ## Pipeline and storage
 

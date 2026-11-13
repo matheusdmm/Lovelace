@@ -9,11 +9,11 @@ use std::{
 use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
 
-use crate::{Language, ProcessingOptions, synthesis};
+use crate::{Language, ProcessingOptions, TranscriptionOptions, synthesis};
 
 #[derive(Deserialize)]
-struct WhisperOutput {
-    transcription: Vec<Segment>,
+pub(crate) struct WhisperOutput {
+    pub(crate) transcription: Vec<Segment>,
     result: Option<WhisperResult>,
 }
 
@@ -36,7 +36,11 @@ struct Offsets {
 
 impl Segment {
     pub fn start(&self) -> String {
-        timestamp(self.offsets.from)
+        timestamp(self.offsets.from, '.')
+    }
+
+    pub(crate) fn range_ms(&self) -> (u64, u64) {
+        (self.offsets.from, self.offsets.to)
     }
 }
 
@@ -71,7 +75,7 @@ pub fn process_with_progress(
         Ok(bytes) => parse_whisper(&bytes)?,
         Err(error) if error.kind() == ErrorKind::NotFound => {
             progress(Stage::Transcribing);
-            let bytes = transcribe(session, &wav, options)?;
+            let bytes = transcribe(session, &wav, &options.transcription, &[])?;
             let output = parse_whisper(&bytes)?;
             save(&json, &bytes)?;
             output
@@ -104,7 +108,7 @@ pub fn process_with_progress(
         .result
         .as_ref()
         .map(|result| result.language.as_str());
-    let language = match (options.idioma, detected) {
+    let language = match (options.transcription.idioma, detected) {
         (Some(Language::Pt), _) => Language::Pt,
         (Some(Language::En), _) => Language::En,
         (_, Some("pt")) => Language::Pt,
@@ -119,7 +123,12 @@ pub fn process_with_progress(
     Ok(())
 }
 
-fn transcribe(session: &Path, wav: &Path, options: &ProcessingOptions) -> Result<Vec<u8>> {
+pub(crate) fn transcribe(
+    directory: &Path,
+    wav: &Path,
+    options: &TranscriptionOptions,
+    extra_args: &[&str],
+) -> Result<Vec<u8>> {
     ensure!(
         options.whisper.is_file(),
         "whisper-cli missing at {}",
@@ -131,7 +140,7 @@ fn transcribe(session: &Path, wav: &Path, options: &ProcessingOptions) -> Result
         options.modelo_whisper.display()
     );
 
-    let scratch = tempfile::tempdir_in(session)?;
+    let scratch = tempfile::tempdir_in(directory)?;
     let output = scratch.path().join("whisper");
     let mut command = options.engine_command(options.whisper.canonicalize()?);
     command
@@ -144,6 +153,7 @@ fn transcribe(session: &Path, wav: &Path, options: &ProcessingOptions) -> Result
         .arg("--output-json")
         .arg("--output-file")
         .arg(&output)
+        .args(extra_args)
         .stdin(Stdio::null())
         .stdout(Stdio::null());
     if options.cpu {
@@ -156,7 +166,7 @@ fn transcribe(session: &Path, wav: &Path, options: &ProcessingOptions) -> Result
     fs::read(output.with_extension("json")).context("whisper-cli did not produce the expected JSON")
 }
 
-fn parse_whisper(bytes: &[u8]) -> Result<WhisperOutput> {
+pub(crate) fn parse_whisper(bytes: &[u8]) -> Result<WhisperOutput> {
     let mut output: WhisperOutput =
         serde_json::from_slice(bytes).context("Invalid Whisper JSON")?;
     output
@@ -178,7 +188,7 @@ fn render_transcript(segments: &[Segment]) -> String {
     }
     for (index, segment) in segments.iter().enumerate() {
         let id = index + 1;
-        let end = timestamp(segment.offsets.to);
+        let end = timestamp(segment.offsets.to, '.');
         let start = segment.start();
         let speech = markdown_text(&segment.text);
         writeln!(
@@ -213,10 +223,10 @@ pub fn markdown_text(text: &str) -> String {
     escaped
 }
 
-fn timestamp(ms: u64) -> String {
+pub(crate) fn timestamp(ms: u64, separator: char) -> String {
     let seconds = ms / 1000;
     format!(
-        "{:02}:{:02}:{:02}.{:03}",
+        "{:02}:{:02}:{:02}{separator}{:03}",
         seconds / 3600,
         seconds / 60 % 60,
         seconds % 60,

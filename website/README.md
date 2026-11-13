@@ -15,6 +15,8 @@ Connect the Git repository as an application, select the branch that contains th
 | Domain | The HTTPS domain for the website |
 | Health check | HTTP GET `/` on port `8080`, expecting `200` |
 
+If the build reports `"/assets": not found`, check both path fields. Set **Base Directory** to `/website` and **Dockerfile Location** to `/Dockerfile`. The resolved file should read `/website/Dockerfile`. Docker uses the base directory to resolve `COPY assets/`, so the resolved Dockerfile path alone is insufficient.
+
 Deploy and open the configured domain. The application needs no environment variables or volumes. See the [Coolify Dockerfile guide](https://coolify.io/docs/applications/builds/dockerfile).
 
 ## Run the container locally

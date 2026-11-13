@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use lovelace::{ProcessingOptions, audio, new_session, pipeline};
+use lovelace::{ProcessingOptions, TranscriptionOptions, audio, captions, new_session, pipeline};
 
 #[derive(Parser)]
 #[command(
@@ -38,6 +38,17 @@ enum Action {
         #[command(flatten)]
         options: ProcessingOptions,
     },
+    /// Generate an SRT subtitle file from local media.
+    Captions {
+        media: PathBuf,
+        /// SRT destination. Defaults to the media file with a .srt extension.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        #[command(flatten)]
+        media_options: captions::MediaOptions,
+        #[command(flatten)]
+        transcription: TranscriptionOptions,
+    },
 }
 
 fn main() -> Result<()> {
@@ -64,5 +75,21 @@ fn main() -> Result<()> {
         }
         Action::Microphones => audio::list_inputs(),
         Action::Process { session, options } => pipeline::process(&session, &options),
+        Action::Captions {
+            media,
+            output,
+            media_options,
+            transcription,
+        } => {
+            let path = captions::generate(
+                &media,
+                output.as_deref(),
+                &media_options,
+                &transcription,
+                |_| {},
+            )?;
+            println!("Captions saved to {}", path.display());
+            Ok(())
+        }
     }
 }

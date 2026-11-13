@@ -37,13 +37,32 @@ fn cli_help_lists_the_available_commands() -> Result<()> {
     let output = cli(root.path()).arg("--help").output()?;
     let help = String::from_utf8(output.stdout)?;
     assert!(output.status.success());
-    for command in ["record", "microphones", "process"] {
+    for command in ["record", "microphones", "process", "captions"] {
         assert!(
             help.lines()
                 .any(|line| line.split_whitespace().next() == Some(command)),
             "{help}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn captions_refuses_to_replace_an_existing_subtitle() -> Result<()> {
+    let root = workspace()?;
+    fs::write(root.path().join("recording.mkv"), "")?;
+    let subtitle = root.path().join("recording.srt");
+    fs::write(&subtitle, "Edited subtitle")?;
+
+    let output = cli(root.path())
+        .args(["captions", "recording.mkv"])
+        .output()?;
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Subtitle destination already exists")
+    );
+    assert_eq!(fs::read_to_string(subtitle)?, "Edited subtitle");
     Ok(())
 }
 
