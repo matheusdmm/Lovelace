@@ -32,7 +32,7 @@ Open <http://localhost:8080/>. For a quick preview without Docker, open `index.h
 
 ## Set the repository and download links
 
-Edit [repository.js](repository.js). Set `source` to the public Git repository URL. Set `windows` and `linux` to the public asset URLs for `lovelace-windows-x64.zip` and `lovelace-linux-x64.tar.gz`. Each empty value keeps its own “coming soon” message. Rebuild and redeploy after editing.
+Edit [repository.js](repository.js). Set `source` to the public Git repository URL. Set `windows` and `linux` to the public asset URLs for `lovelace-windows-x64.zip` and `lovelace-linux-x64.tar.gz`. Each empty value keeps its own “coming soon” message. When changing these values, also change the `v` query parameter on the `repository.js` script in [index.html](index.html), then rebuild and redeploy. This makes browsers and Cloudflare request the updated configuration instead of reusing a cached script. If the HTML is also cached, purge `/` and `/index.html` in Cloudflare after deploying.
 
 The [Build binaries workflow](../.github/workflows/build.yml) creates both archives as GitHub Actions artifacts. Attach the tested archives to a GitHub Release to give the site stable download URLs. Add the project's chosen license to the repository so readers can find the terms when they inspect the source.
 
