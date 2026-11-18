@@ -1,8 +1,8 @@
 // Use the public repository URL and the published archive URLs for each platform.
 const repositoryLinks = {
-  source: "",
-  windows: "",
-  linux: "",
+  source: "https://github.com/matheusdmm/Lovelace",
+  windows: "https://github.com/matheusdmm/Lovelace/releases/",
+  linux: "https://github.com/matheusdmm/Lovelace/releases/",
 };
 
 for (const link of document.querySelectorAll("[data-repository-link]")) {
