@@ -7,7 +7,9 @@ The [Lovelace website](website/) includes downloads, an audit guide, and instruc
 
 ## Binaries
 
-The [Build binaries workflow](.github/workflows/build.yml) runs on pushes and pull requests to `main`. You can also run it manually from **Actions**. Downloads are available under **Artifacts** for each run.
+The [Build binaries workflow](.github/workflows/build.yml) runs on pushes and pull requests to `main` that change Rust code, tests, dependencies, build configuration, or packaged desktop assets. Changes limited to `website/` or documentation do not trigger a build. You can also run it manually from **Actions**. Downloads are available under **Artifacts** for each run.
+
+Pushing a version tag such as `v0.2.1` builds both platforms and publishes a [GitHub Release](https://github.com/matheusdmm/Lovelace/releases) with the Windows and Linux archives after all tests and builds pass.
 
 | x64 artifact | Contents |
 | --- | --- |
