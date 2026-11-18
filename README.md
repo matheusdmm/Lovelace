@@ -1,4 +1,5 @@
 # Lovelace
+[![Build binaries](https://github.com/matheusdmm/Lovelace/actions/workflows/build.yml/badge.svg)](https://github.com/matheusdmm/Lovelace/actions/workflows/build.yml)
 
 Lovelace is an idea recorder for Windows and Linux that produces transcripts and summaries in Markdown. Each summary note links to the transcript segments that support it. Lovelace also generates timestamped SRT subtitles from video and audio files, including finished OBS Studio recordings. Media processing and inference stay on your machine.
 
