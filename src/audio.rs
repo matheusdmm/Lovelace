@@ -18,25 +18,29 @@ use cpal::{
 
 type WavWriter = hound::WavWriter<BufWriter<File>>;
 
+pub fn available_inputs() -> Result<impl Iterator<Item = Device>> {
+    cpal::default_host()
+        .input_devices()
+        .context("Could not list audio inputs")
+}
+
 pub fn list_inputs() -> Result<()> {
     let host = cpal::default_host();
     if let Some(device) = host.default_input_device() {
         println!("Default input: {}", device.name()?);
     }
-    for (index, device) in host.input_devices()?.enumerate() {
+    for (index, device) in available_inputs()?.enumerate() {
         println!("{index}: {}", device.name()?);
     }
     Ok(())
 }
 
 pub fn input_device(index: Option<usize>) -> Result<Device> {
-    let host = cpal::default_host();
     match index {
-        Some(index) => host
-            .input_devices()?
+        Some(index) => available_inputs()?
             .nth(index)
             .with_context(|| format!("Input {index} not found. Run `lovelace microphones` to list inputs.")),
-        None => host.default_input_device().context(
+        None => cpal::default_host().default_input_device().context(
             "No default microphone found. Check your system audio input and microphone permissions.",
         ),
     }

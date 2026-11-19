@@ -1,6 +1,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 use std::{
+    collections::HashMap,
     env, fs,
     io::ErrorKind,
     path::{Path, PathBuf},
@@ -13,12 +14,17 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail, ensure};
+use cpal::traits::DeviceTrait;
 use lovelace::{
     Language, ProcessingOptions, TranscriptionOptions, audio, captions, new_session, pipeline,
 };
 use pulldown_cmark::{Event, Parser, Tag, TagEnd, html};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, State, WindowEvent};
+use tauri_plugin_dialog::DialogExt;
+
+#[path = "desktop/settings.rs"]
+mod settings;
 
 #[derive(Clone, Copy, Default, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -50,6 +56,7 @@ struct Status {
     level: f32,
     captions: bool,
     subtitle_path: Option<PathBuf>,
+    refresh_audio_inputs: bool,
 }
 
 #[derive(Default)]
@@ -62,6 +69,19 @@ struct Desktop {
     root: PathBuf,
     job: Arc<Mutex<Job>>,
     level: Arc<AtomicU32>,
+    audio_inputs: Mutex<AudioInputs>,
+}
+
+#[derive(Default)]
+struct AudioInputs {
+    revision: u64,
+    devices: HashMap<String, cpal::Device>,
+}
+
+#[derive(Serialize)]
+struct AudioInput {
+    id: String,
+    name: String,
 }
 
 impl Desktop {
@@ -81,10 +101,44 @@ impl Desktop {
         let root = self.sessions().canonicalize()?;
         let path = root.join(id);
         ensure!(
-            fs::symlink_metadata(&path)?.is_dir() && path.canonicalize()?.parent() == Some(&root),
+            fs::symlink_metadata(&path)?.is_dir() && path.canonicalize()? == path,
             "Invalid session folder"
         );
         Ok(path)
+    }
+
+    fn set_favorite(&self, id: &str, favorite: bool) -> Result<()> {
+        let path = self.session(id)?;
+        wave_file(&path)?;
+        let marker = path.join(".favorite");
+        if favorite {
+            match fs::File::create_new(&marker) {
+                Ok(_) => Ok(()),
+                Err(error)
+                    if error.kind() == ErrorKind::AlreadyExists && is_regular_file(&marker) =>
+                {
+                    Ok(())
+                }
+                Err(error) => Err(error).context("Could not favorite the session"),
+            }
+        } else {
+            match fs::remove_file(&marker) {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+                Err(error) => Err(error).context("Could not remove the favorite"),
+            }
+        }
+    }
+
+    fn delete_session(&self, id: &str) -> Result<()> {
+        let job = self.job.lock().unwrap();
+        ensure!(
+            !job.status.phase.busy(),
+            "Wait for the active job to finish before deleting a session"
+        );
+        let path = self.session(id)?;
+        wave_file(&path)?;
+        fs::remove_dir_all(path).context("Could not delete all session files")
     }
 
     fn launch(
@@ -138,6 +192,28 @@ struct Session {
     timestamp: u64,
     has_summary: bool,
     has_transcript: bool,
+    favorite: bool,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SessionSource {
+    Folder,
+    Summary,
+    Transcript,
+}
+
+impl SessionSource {
+    fn path(self, folder: PathBuf) -> Result<PathBuf> {
+        let name = match self {
+            Self::Folder => return Ok(folder),
+            Self::Summary => "sintese.md",
+            Self::Transcript => "transcricao.md",
+        };
+        let path = folder.join(name);
+        ensure!(is_regular_file(&path), "Session source file is unavailable");
+        Ok(path)
+    }
 }
 
 #[derive(Serialize)]
@@ -155,6 +231,10 @@ struct Review {
 
 fn error_message(error: anyhow::Error) -> String {
     format!("{error:#}")
+}
+
+fn is_regular_file(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file())
 }
 
 fn list_sessions(state: &Desktop) -> Result<Vec<Session>> {
@@ -181,8 +261,9 @@ fn list_sessions(state: &Desktop) -> Result<Vec<Session>> {
                 Session {
                     id,
                     timestamp,
-                    has_summary: entry.path().join("sintese.md").is_file(),
-                    has_transcript: entry.path().join("transcricao.md").is_file(),
+                    has_summary: is_regular_file(&entry.path().join("sintese.md")),
+                    has_transcript: is_regular_file(&entry.path().join("transcricao.md")),
+                    favorite: is_regular_file(&entry.path().join(".favorite")),
                 },
             ));
         }
@@ -249,6 +330,102 @@ async fn history(state: State<'_, Desktop>) -> Result<Vec<Session>, String> {
 }
 
 #[tauri::command]
+fn set_favorite(id: String, favorite: bool, state: State<'_, Desktop>) -> Result<(), String> {
+    state.set_favorite(&id, favorite).map_err(error_message)
+}
+
+#[tauri::command]
+async fn delete_session(id: String, state: State<'_, Desktop>) -> Result<(), String> {
+    state.delete_session(&id).map_err(error_message)
+}
+
+#[tauri::command]
+async fn open_session_source(
+    id: String,
+    source: SessionSource,
+    state: State<'_, Desktop>,
+) -> Result<(), String> {
+    let path = state
+        .session(&id)
+        .and_then(|folder| source.path(folder))
+        .map_err(error_message)?;
+    tauri::async_runtime::spawn_blocking(move || open_in_system(&path))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(error_message)
+}
+
+#[cfg(windows)]
+fn open_in_system(path: &Path) -> Result<()> {
+    use std::{os::windows::ffi::OsStrExt, ptr::null_mut};
+    use windows_sys::Win32::{
+        System::Com::{
+            COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
+        },
+        UI::{
+            Shell::{SE_ERR_NOASSOC, ShellExecuteW},
+            WindowsAndMessaging::SW_SHOWNORMAL,
+        },
+    };
+
+    let path = dunce::simplified(path);
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+    // Initialize COM for shell extensions on this worker thread. The path
+    // stays null-terminated and alive until ShellExecuteW returns.
+    let result = unsafe {
+        let initialized = CoInitializeEx(
+            std::ptr::null(),
+            (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32,
+        );
+        ensure!(
+            initialized >= 0,
+            "Could not initialize the Windows file opener (0x{initialized:08x})"
+        );
+        let result = ShellExecuteW(
+            null_mut(),
+            std::ptr::null(),
+            wide.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        );
+        CoUninitialize();
+        result as usize
+    };
+    if result == SE_ERR_NOASSOC as usize && path.extension().is_some_and(|ext| ext == "md") {
+        std::process::Command::new("notepad.exe")
+            .arg(path)
+            .spawn()
+            .context("Could not open the Markdown file")?;
+        return Ok(());
+    }
+    ensure!(
+        result > 32,
+        "Windows could not open the session source (code {result})"
+    );
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn open_in_system(path: &Path) -> Result<()> {
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    let output = std::process::Command::new(opener)
+        .arg(path)
+        .output()
+        .context("Could not start the system file opener")?;
+    ensure!(
+        output.status.success(),
+        "Could not open the session source: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    Ok(())
+}
+
+#[tauri::command]
 async fn review(
     id: String,
     app: tauri::AppHandle,
@@ -297,6 +474,31 @@ fn process(job: &Mutex<Job>, session: &Path, options: &ProcessingOptions) -> Res
 }
 
 #[tauri::command]
+async fn pick_caption_media(window: tauri::WebviewWindow) -> Result<Option<PathBuf>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        window
+            .dialog()
+            .file()
+            .set_parent(&window)
+            .set_title("Select audio or video")
+            .add_filter(
+                "Audio and video",
+                &[
+                    "wav", "mp3", "m4a", "aac", "flac", "ogg", "opus", "mp4", "mkv", "mov", "webm",
+                    "avi", "m4v", "mpeg", "ts",
+                ],
+            )
+            .add_filter("All files", &["*"])
+            .blocking_pick_file()
+            .map(|file| file.into_path())
+            .transpose()
+    })
+    .await
+    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn generate_captions(
     media: PathBuf,
     language: String,
@@ -333,14 +535,69 @@ fn generate_captions(
 }
 
 #[tauri::command]
-fn start_recording(language: String, state: State<'_, Desktop>) -> Result<(), String> {
+async fn list_audio_inputs(state: State<'_, Desktop>) -> Result<Vec<AudioInput>, String> {
+    let devices = tauri::async_runtime::spawn_blocking(|| {
+        Ok::<_, anyhow::Error>(
+            audio::available_inputs()?
+                .enumerate()
+                .map(|(index, device)| {
+                    let name = device
+                        .name()
+                        .unwrap_or_else(|_| format!("Audio input {}", index + 1));
+                    (name, device)
+                })
+                .collect::<Vec<_>>(),
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?
+    .map_err(error_message)?;
+
+    let mut inputs = state.audio_inputs.lock().unwrap();
+    inputs.revision += 1;
+    let revision = inputs.revision;
+    inputs.devices.clear();
+    Ok(devices
+        .into_iter()
+        .enumerate()
+        .map(|(index, (name, device))| {
+            // IDs belong to one scan. A later scan can never redirect an old ID.
+            let id = format!("{revision}:{index}");
+            inputs.devices.insert(id.clone(), device);
+            AudioInput { id, name }
+        })
+        .collect())
+}
+
+#[tauri::command]
+fn start_recording(
+    language: String,
+    input_id: Option<String>,
+    state: State<'_, Desktop>,
+) -> Result<(), String> {
     let language = selected_language(Some(&language)).map_err(error_message)?;
     let options = ProcessingOptions::desktop(&state.root, language);
     let sessions = state.sessions();
     let level = Arc::clone(&state.level);
+    let input = input_id.map(|id| {
+        state
+            .audio_inputs
+            .lock()
+            .unwrap()
+            .devices
+            .get(&id)
+            .cloned()
+            .context("The selected audio input is no longer available")
+    });
     state
         .launch(Phase::Starting, move |job| {
-            let device = audio::input_device(None)?;
+            let explicit_input = input.is_some();
+            let device = match input {
+                Some(device) => device.inspect_err(|_| {
+                    job.lock().unwrap().status.refresh_audio_inputs = true;
+                })?,
+                None => audio::input_device(None)?,
+            };
             let session = new_session(&sessions)?;
             let path = session.join("audio.wav");
             let recorded = audio::record_until(&device, &path, Some(level), |stop| {
@@ -354,7 +611,16 @@ fn start_recording(language: String, state: State<'_, Desktop>) -> Result<(), St
                     .and_then(|name| name.to_str())
                     .map(str::to_owned);
             }
-            recorded?;
+            recorded.inspect_err(|error| {
+                if explicit_input
+                    && (error.is::<cpal::DefaultStreamConfigError>()
+                        || error.is::<cpal::BuildStreamError>()
+                        || error.is::<cpal::PlayStreamError>()
+                        || error.is::<cpal::StreamError>())
+                {
+                    job.lock().unwrap().status.refresh_audio_inputs = true;
+                }
+            })?;
             process(job, &session, &options)
         })
         .map_err(error_message)
@@ -406,12 +672,15 @@ fn project_root() -> Result<PathBuf> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.manage(Desktop {
                 root: project_root()?,
                 job: Arc::default(),
                 level: Arc::default(),
+                audio_inputs: Mutex::default(),
             });
+            settings::setup(app)?;
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -424,11 +693,18 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            settings::get_settings,
+            settings::save_settings,
             history,
+            set_favorite,
+            delete_session,
+            open_session_source,
             review,
             status,
+            list_audio_inputs,
             start_recording,
             stop_recording,
+            pick_caption_media,
             generate_captions,
             retry
         ])

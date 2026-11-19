@@ -5,6 +5,7 @@ fn desktop(root: &Path) -> Desktop {
         root: root.into(),
         job: Arc::default(),
         level: Arc::default(),
+        audio_inputs: Mutex::default(),
     }
 }
 
@@ -86,6 +87,67 @@ fn opening_a_session_requires_a_known_session_directory() -> Result<()> {
     for id in ["rascunho", "sessao-1000-1", "sessao-1000-2"] {
         assert!(state.session(id).is_err(), "{id}");
     }
+    Ok(())
+}
+
+#[test]
+fn favorites_persist_with_the_session_and_can_be_cleared() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let state = desktop(root.path());
+    let id = "sessao-1000-0";
+    write_audio(&session(&state, id)?, true)?;
+
+    state.set_favorite(id, true)?;
+    state.set_favorite(id, true)?;
+    assert!(list_sessions(&desktop(root.path()))?[0].favorite);
+
+    state.set_favorite(id, false)?;
+    state.set_favorite(id, false)?;
+    assert!(!list_sessions(&desktop(root.path()))?[0].favorite);
+    Ok(())
+}
+
+#[test]
+fn deletion_is_limited_to_an_existing_session_and_requires_idle_processing() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let state = desktop(root.path());
+    let id = "sessao-1000-0";
+    let path = session(&state, id)?;
+    write_audio(&path, true)?;
+    let other = session(&state, "sessao-2000-0")?;
+    write_audio(&other, true)?;
+    state.set_favorite(id, true)?;
+    fs::write(path.join("sintese.md"), "# Summary")?;
+
+    assert!(state.delete_session("../sessao-2000-0").is_err());
+    state.job.lock().unwrap().status.phase = Phase::Transcribing;
+    assert!(state.delete_session(id).is_err());
+    assert!(path.join("audio.wav").is_file());
+
+    state.job.lock().unwrap().status.phase = Phase::Idle;
+    state.delete_session(id)?;
+    assert!(!path.exists());
+    assert!(other.join("audio.wav").is_file());
+    assert_eq!(list_sessions(&state)?.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn source_actions_resolve_only_existing_markdown_files() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let state = desktop(root.path());
+    let id = "sessao-1000-0";
+    let path = session(&state, id)?;
+    fs::write(path.join("sintese.md"), "# Summary")?;
+    fs::create_dir(path.join("transcricao.md"))?;
+
+    let folder = state.session(id)?;
+    assert_eq!(SessionSource::Folder.path(folder.clone())?, folder);
+    assert_eq!(
+        SessionSource::Summary.path(folder.clone())?,
+        folder.join("sintese.md")
+    );
+    assert!(SessionSource::Transcript.path(folder).is_err());
     Ok(())
 }
 

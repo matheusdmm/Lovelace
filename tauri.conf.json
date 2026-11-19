@@ -11,6 +11,7 @@
     "windows": [
       {
         "title": "Lovelace",
+        "create": false,
         "width": 1100,
         "height": 760,
         "minWidth": 680,

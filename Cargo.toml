@@ -11,7 +11,7 @@ path = "src/bin/desktop.rs"
 required-features = ["desktop"]
 
 [features]
-desktop = ["dep:pulldown-cmark", "dep:tauri", "dep:tauri-build"]
+desktop = ["dep:dunce", "dep:pulldown-cmark", "dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog", "dep:window-vibrancy", "dep:windows-sys", "dep:windows-version"]
 
 [dependencies]
 anyhow = "1"
@@ -24,6 +24,13 @@ tempfile = "3"
 ureq = { version = "3", default-features = false, features = ["json"] }
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"], optional = true }
 tauri = { version = "2", features = ["protocol-asset"], optional = true }
+tauri-plugin-dialog = { version = "2", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+dunce = { version = "1", optional = true }
+window-vibrancy = { version = "0.6", optional = true }
+windows-sys = { version = "0.61", features = ["Win32_System_Com", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"], optional = true }
+windows-version = { version = "0.1", optional = true }
 
 [build-dependencies]
 tauri-build = { version = "2.7.1", optional = true }

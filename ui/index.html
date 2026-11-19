@@ -1,6 +1,5 @@
 <!doctype html>
 <html lang="en">
-
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,16 +7,15 @@
     <link rel="stylesheet" href="./styles.css">
     <script type="module" src="./app.js"></script>
 </head>
-
 <body>
-    <header class="app-header">
-        <button type="button" class="brand" data-view-target="dashboard" aria-label="Lovelace dashboard">
-            <svg class="brand-mark" width="30" height="30" viewBox="0 0 100 100" aria-hidden="true">
+    <!-- Elements with data-text display optional text. If removed, update any ARIA references to them. -->
+    <aside class="sidebar" aria-label="Workspace">
+        <div class="brand">
+            <svg class="brand-mark" width="28" height="28" viewBox="0 0 100 100" aria-hidden="true">
                 <rect x="2" y="2" width="96" height="96" rx="21" fill="#780000" />
                 <g fill="#fdf0d5">
                     <ellipse cx="35.5" cy="35.5" rx="11.5" ry="12.5" />
-                    <path
-                        d="M23 77 C28 70 36 69 43 64 C46 61 44 57 40 52 C34 46 32 39 34 32 C36 21 46 16 56 18 C65 19 70 26 70 35 C69 38 71 41 75 45 C77 47 75 49 71 49 C70 50 70 52 71 54 C71 55 69 56 68 56 C69 59 67 62 63 62 C58 61 55 62 55 66 C56 71 66 73 74 76 C76 77 77 79 75 81 L25 81 C23 80 22 79 23 77 Z" />
+                    <path d="M23 77 C28 70 36 69 43 64 C46 61 44 57 40 52 C34 46 32 39 34 32 C36 21 46 16 56 18 C65 19 70 26 70 35 C69 38 71 41 75 45 C77 47 75 49 71 49 C70 50 70 52 71 54 C71 55 69 56 68 56 C69 59 67 62 63 62 C58 61 55 62 55 66 C56 71 66 73 74 76 C76 77 77 79 75 81 L25 81 C23 80 22 79 23 77 Z" />
                 </g>
                 <g fill="#780000">
                     <rect x="37.05" y="37.5" width="3.9" height="5" rx="1.95" />
@@ -28,151 +26,231 @@
                 </g>
             </svg>
             Lovelace
-        </button>
-        <button type="button" id="back" class="back" data-view-target="dashboard" hidden>
-            <span aria-hidden="true">←</span> Back to dashboard
-        </button>
-        <button type="button" id="active-job" class="job-status" data-view-target="record" hidden></button>
-    </header>
+        </div>
+        <nav class="navigation" aria-label="Main navigation">
+            <button type="button" class="nav-item" data-view-target="record" aria-current="page">
+                <span class="icon icon-mic" aria-hidden="true"></span> Recorder
+            </button>
+            <button type="button" class="nav-item" data-view-target="sessions">
+                <span class="icon icon-library" aria-hidden="true"></span> Sessions
+                <span class="nav-count" data-text="session-count" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="nav-item" data-view-target="captions">
+                <span class="icon icon-captions" aria-hidden="true"></span> Captions
+            </button>
+            <button type="button" class="nav-item" data-view-target="settings">
+                <span class="icon icon-settings" aria-hidden="true"></span> Settings
+            </button>
+        </nav>
+    </aside>
 
-    <main class="workspace" data-view="dashboard">
+    <main class="workspace" data-view="record">
+        <header class="topbar">
+            <h1 data-text="view-heading" tabindex="-1">Recorder</h1>
+            <button type="button" id="active-job" class="job-status" data-view-target="record" hidden></button>
+        </header>
         <p id="message" class="message" role="status" hidden></p>
 
-        <section class="studio" aria-labelledby="studio-heading">
-            <div class="studio-intro">
-                <h1 id="studio-heading" tabindex="-1">Recording<br> studio</h1>
-                <button type="button" class="studio-link" data-view-target="record">
-                    Open recorder <span aria-hidden="true">↗</span>
-                </button>
-                <button type="button" class="studio-link" data-view-target="captions">
-                    Create captions <span aria-hidden="true">↗</span>
-                </button>
-            </div>
-            <div class="toolbar" aria-label="Recorder">
-                <div class="record-status">
-                    <span class="status-dot" aria-hidden="true"></span>
-                </div>
-                <time id="elapsed" aria-label="Recording time">00:00</time>
-                <div class="signal">
-                    <span id="signal-label">Microphone level</span>
-                    <meter id="level" class="visually-hidden" min="0" max="1" value="0"
-                        aria-labelledby="signal-label"></meter>
-                    <canvas id="signal-chart" width="720" height="96" aria-hidden="true"></canvas>
-                </div>
-                <div class="record-controls">
-                    <div class="language-control">
-                        <label for="language">Spoken language</label>
-                        <select id="language">
-                            <option value="pt">Portuguese</option>
-                            <option value="en">English</option>
-                            <option value="auto">Auto-detect</option>
-                        </select>
-                    </div>
-                    <button type="button" id="record" class="primary"><span aria-hidden="true"></span><b
-                            id="record-label">Record</b></button>
-                </div>
-            </div>
-        </section>
-
-        <section class="captions-panel panel" aria-labelledby="captions-heading">
-            <header class="panel-header">
-                <h2 id="captions-heading" tabindex="-1">Create captions</h2>
-            </header>
-            <form id="captions-form">
-                <label for="caption-media">Media file</label>
-                <input id="caption-media" type="text" placeholder="Drop a file here or paste its path" required>
-                <div class="caption-controls">
-                    <div class="language-control">
-                        <label for="caption-language">Spoken language</label>
-                        <select id="caption-language">
-                            <option value="pt">Portuguese</option>
-                            <option value="en">English</option>
-                            <option value="auto">Auto-detect</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="caption-track">Audio track</label>
-                        <input id="caption-track" type="number" min="1" max="4294967295" value="1" required>
-                    </div>
-                    <button type="submit" id="generate-captions" class="secondary">Generate SRT</button>
-                </div>
-            </form>
-            <p id="caption-status" role="status">The SRT is saved next to the media file.</p>
-            <input id="caption-output" type="text" aria-label="Saved subtitle path" readonly hidden>
-        </section>
-
-        <section class="history-panel panel" aria-labelledby="history-heading">
-            <header class="panel-header">
-                <h2 id="history-heading" tabindex="-1">History</h2>
-                <button type="button" class="panel-link" data-view-target="history" aria-label="Open history">
-                    <span aria-hidden="true">↗</span>
-                </button>
-            </header>
-            <div class="history-total">
-                <span id="session-count">0</span>
-                <span id="session-count-label">sessions</span>
-            </div>
-            <nav id="history" aria-labelledby="history-heading"></nav>
-        </section>
-
-        <section class="documents-panel panel" aria-label="Session documents">
-            <button type="button" class="document-preview" data-view-target="documents">
-                <span class="panel-kicker">Documents</span>
-                <span class="panel-link" aria-hidden="true">↗</span>
-                <span id="preview-title" class="preview-title">Summary and transcript</span>
-                <span id="preview-detail" class="preview-detail">Your recording documents will appear here.</span>
-            </button>
-
-            <div id="review" class="review" hidden>
-                <div class="review-header">
-                    <div class="review-heading">
-                        <div>
-                            <span id="session-state" class="panel-kicker"></span>
-                            <h2 id="session-title" tabindex="-1"></h2>
+        <section class="view page-scroll" data-panel="record" aria-label="Recorder">
+            <div class="page-content recording-page">
+                <section class="recorder" aria-labelledby="studio-heading">
+                    <h2 id="studio-heading">New recording</h2>
+                    <div class="toolbar" aria-label="Recording controls">
+                        <div class="monitor">
+                            <div class="monitor-header">
+                                <time data-text="elapsed" aria-label="Recording time">00:00</time>
+                            </div>
+                            <canvas id="signal-chart" width="900" height="112" aria-hidden="true"></canvas>
+                            <div class="monitor-footer">
+                                <span class="icon icon-mic" aria-hidden="true"></span>
+                                <span id="signal-label" data-text="signal-label">System default</span>
+                                <meter id="level" class="visually-hidden" min="0" max="1" value="0"
+                                    aria-label="Audio input level"></meter>
+                            </div>
                         </div>
-                        <button type="button" id="retry" class="secondary" hidden>Process session</button>
-                    </div>
-                    <div class="document-toolbar">
-                        <div class="document-picker" role="group" aria-label="Document">
-                            <button type="button" data-document="summary" aria-pressed="true">Summary</button>
-                            <button type="button" data-document="transcript" aria-pressed="false">Transcript</button>
+                        <div class="record-controls">
+                            <div class="field input-field">
+                                <label for="audio-input">Audio input</label>
+                                <div class="input-controls">
+                                    <select id="audio-input">
+                                        <option value="default">System default</option>
+                                    </select>
+                                    <button type="button" id="refresh-audio-inputs" class="button secondary"
+                                        aria-label="Refresh audio inputs">Refresh</button>
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label for="language">Spoken language</label>
+                                <select id="language">
+                                    <option value="pt">Portuguese</option>
+                                    <option value="en">English</option>
+                                    <option value="auto">Auto-detect</option>
+                                </select>
+                            </div>
+                            <button type="button" id="record" class="button primary">
+                                <span class="record-mark" aria-hidden="true"></span>
+                                <span data-text="record-label">Start recording</span>
+                            </button>
                         </div>
-                        <button type="button" id="copy" class="secondary">Copy Markdown</button>
                     </div>
-                </div>
-                <div id="reading-pane" class="reading-pane">
-                    <article id="document" class="document"></article>
-                </div>
-            </div>
+                </section>
 
-            <div id="empty" class="empty">
-                <h2 id="empty-title" tabindex="-1">Your first recording</h2>
-                <p id="empty-description">The transcript and summary will appear here after processing.</p>
-                <button type="button" class="secondary" data-view-target="record">Open recorder</button>
+                <section class="recent-panel" aria-labelledby="recent-heading">
+                    <div class="section-heading">
+                        <h2 id="recent-heading">Recent sessions</h2>
+                        <button type="button" class="button quiet" data-view-target="sessions">
+                            View all <span aria-hidden="true">→</span>
+                        </button>
+                    </div>
+                    <div id="recent"></div>
+                </section>
             </div>
         </section>
 
-        <section class="audio-panel panel" aria-labelledby="audio-heading">
-            <header class="panel-header">
-                <h2 id="audio-heading" tabindex="-1">Session audio</h2>
-                <button type="button" class="panel-link" data-view-target="audio" aria-label="Open session audio">
-                    <span aria-hidden="true">↗</span>
-                </button>
-            </header>
-            <p id="audio-session" class="audio-session" hidden></p>
-            <div id="player" class="player" hidden>
-                <audio id="audio" preload="metadata"></audio>
-                <button id="play" type="button" aria-label="Play" disabled>
-                    <span aria-hidden="true"></span>
-                </button>
-                <time id="current-time">00:00</time>
-                <input id="seek" type="range" min="0" max="1" step="any" value="0" aria-label="Playback position"
-                    disabled>
-                <time id="duration">00:00</time>
+        <section class="view library" data-panel="sessions" aria-label="Sessions" hidden>
+            <section class="session-list" aria-labelledby="history-heading">
+                <h2 id="history-heading">Session history</h2>
+                <div id="history"></div>
+            </section>
+            <div class="session-detail">
+                <section id="review" class="review" aria-label="Session review" aria-labelledby="session-title" hidden>
+                    <header class="review-header">
+                        <div class="review-heading">
+                            <div>
+                                <h2 id="session-title" data-text="session-title" tabindex="-1"></h2>
+                                <p id="session-state" data-text="session-state"></p>
+                            </div>
+                            <button type="button" id="retry" class="button secondary" hidden>Process session</button>
+                        </div>
+                        <div class="document-toolbar">
+                            <div class="document-picker" role="group" aria-label="Document">
+                                <button type="button" data-document="summary" aria-pressed="true">Summary</button>
+                                <button type="button" data-document="transcript" aria-pressed="false">Transcript</button>
+                            </div>
+                            <button type="button" id="copy" class="button quiet">Copy Markdown</button>
+                        </div>
+                    </header>
+                    <div id="reading-pane" class="reading-pane">
+                        <article id="document" class="document"></article>
+                    </div>
+                    <div id="player" class="player" role="group" aria-label="Session audio" hidden>
+                        <audio id="audio" preload="metadata"></audio>
+                        <button id="play" type="button" aria-label="Play" disabled>
+                            <span aria-hidden="true"></span>
+                        </button>
+                        <time data-text="current-time">00:00</time>
+                        <input id="seek" type="range" min="0" max="1" step="any" value="0"
+                            aria-label="Playback position" disabled>
+                        <time data-text="duration">00:00</time>
+                    </div>
+                </section>
+                <div id="empty" class="empty">
+                    <span class="icon icon-library" aria-hidden="true"></span>
+                    <h2 data-text="empty-title">No sessions yet</h2>
+                    <p data-text="empty-description">Your recordings, transcripts and summaries will appear here.</p>
+                    <button type="button" class="button secondary" data-view-target="record">Open recorder</button>
+                </div>
             </div>
-            <p class="no-audio">Open a session to play its audio.</p>
+        </section>
+
+        <section class="view page-scroll" data-panel="captions" aria-labelledby="captions-heading" hidden>
+            <div class="page-content captions-page">
+                <h2 id="captions-heading">Create captions</h2>
+                <form id="captions-form">
+                    <div class="field media-field">
+                        <label for="caption-media">Audio or video file</label>
+                        <p id="media-hint">Choose a file, drop it into this window, or paste its path.</p>
+                        <div class="media-picker">
+                            <input id="caption-media" type="text" placeholder="Path to media file" aria-describedby="media-hint" required>
+                            <button type="button" class="button secondary" id="pick-caption-media">Browse…</button>
+                        </div>
+                    </div>
+                    <div class="caption-controls">
+                        <div class="field">
+                            <label for="caption-language">Spoken language</label>
+                            <select id="caption-language">
+                                <option value="pt">Portuguese</option>
+                                <option value="en">English</option>
+                                <option value="auto">Auto-detect</option>
+                            </select>
+                        </div>
+                        <div class="field track-field">
+                            <label for="caption-track">Audio track</label>
+                            <input id="caption-track" type="number" min="1" max="4294967295" value="1" required>
+                        </div>
+                    </div>
+                    <div class="caption-action">
+                        <button type="submit" id="generate-captions" class="button primary">Generate SRT</button>
+                        <p id="caption-status" role="status">The SRT is saved next to the media file.</p>
+                    </div>
+                    <input id="caption-output" type="text" aria-label="Saved subtitle path" readonly hidden>
+                </form>
+            </div>
+        </section>
+
+        <section class="view page-scroll" data-panel="settings" aria-label="Settings" hidden>
+            <div class="page-content settings-page">
+                <form id="settings-form">
+                    <fieldset aria-labelledby="appearance-heading">
+                        <h2 id="appearance-heading">Appearance</h2>
+                        <div class="setting-row">
+                            <label for="setting-appearance">Theme</label>
+                            <select id="setting-appearance">
+                                <option value="system">System</option>
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                            </select>
+                        </div>
+                        <div class="setting-row">
+                            <div>
+                                <label for="setting-backdrop">Window effect</label>
+                                <p id="backdrop-hint" data-text="backdrop-hint">Applies to the sidebar and toolbar.</p>
+                            </div>
+                            <select id="setting-backdrop" aria-describedby="backdrop-hint">
+                                <option value="solid">None</option>
+                                <option value="mica">Mica</option>
+                                <option value="acrylic">Acrylic</option>
+                            </select>
+                        </div>
+                    </fieldset>
+                    <fieldset aria-labelledby="defaults-heading">
+                        <h2 id="defaults-heading">Recording and captions</h2>
+                        <div class="setting-row">
+                            <label for="setting-language">Default spoken language</label>
+                            <select id="setting-language">
+                                <option value="pt">Portuguese</option>
+                                <option value="en">English</option>
+                                <option value="auto">Auto-detect</option>
+                            </select>
+                        </div>
+                    </fieldset>
+                    <div class="settings-actions">
+                        <button type="submit" class="button primary" id="save-settings" disabled>Save settings</button>
+                        <p id="settings-status" role="status"></p>
+                    </div>
+                </form>
+            </div>
         </section>
     </main>
-</body>
 
+    <div id="session-menu" class="session-menu" role="menu" aria-label="Session actions" hidden>
+        <button type="button" role="menuitem" data-action="favorite" tabindex="-1">Add to favorites</button>
+        <button type="button" role="menuitem" data-action="summary" tabindex="-1">Open summary source</button>
+        <button type="button" role="menuitem" data-action="transcript" tabindex="-1">Open transcript source</button>
+        <button type="button" role="menuitem" data-action="folder" tabindex="-1">Open session folder</button>
+        <hr role="separator">
+        <button type="button" role="menuitem" data-action="delete" tabindex="-1">Delete session…</button>
+    </div>
+
+    <dialog id="delete-session" class="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-description">
+        <form method="dialog">
+            <h2 id="delete-title">Delete session?</h2>
+            <p id="delete-description"></p>
+            <div class="dialog-actions">
+                <button class="button secondary" value="cancel" autofocus>Cancel</button>
+                <button class="button primary" value="delete">Delete permanently</button>
+            </div>
+        </form>
+    </dialog>
+</body>
 </html>
