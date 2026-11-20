@@ -3,10 +3,73 @@ use super::*;
 fn desktop(root: &Path) -> Desktop {
     Desktop {
         root: root.into(),
+        models: Arc::new(
+            models::ModelStore::new(
+                root.into(),
+                root.join("resources"),
+                root.join("models.json"),
+            )
+            .unwrap(),
+        ),
         job: Arc::default(),
         level: Arc::default(),
         audio_inputs: Mutex::default(),
     }
+}
+
+#[test]
+fn active_restart_waits_for_the_worker_and_rejects_other_sessions() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let state = desktop(root.path());
+    let id = "sessao-2000-0";
+    let path = session(&state, id)?;
+    write_audio(&path, true)?;
+    fs::write(path.join("transcricao.md"), "Previous transcript")?;
+    let other = session(&state, "sessao-3000-0")?;
+    write_audio(&other, true)?;
+    let (release, wait) = mpsc::channel();
+    state.launch_job(
+        Status {
+            phase: Phase::Transcribing,
+            session: Some(id.into()),
+            ..Status::default()
+        },
+        move |_| {
+            wait.recv()?;
+            Ok(())
+        },
+    )?;
+    assert!(start_session_processing("sessao-3000-0".into(), "pt".into(), true, &state).is_err());
+    assert!(start_session_processing(id.into(), "pt".into(), false, &state).is_err());
+    start_session_processing(id.into(), "pt".into(), true, &state)?;
+    assert!(start_session_processing(id.into(), "pt".into(), true, &state).is_err());
+    assert!(path.join("transcricao.md").exists());
+    release.send(())?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let job = state.job.lock().unwrap();
+        if !job.status.phase.busy() {
+            assert!(matches!(job.status.phase, Phase::Failed)); // Fixture has no engine.
+            assert_eq!(job.status.attempt, 2);
+            assert!(!job.status.restarting);
+            break;
+        }
+        ensure!(
+            std::time::Instant::now() < deadline,
+            "Restart worker did not finish"
+        );
+        drop(job);
+        thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(!path.join("transcricao.md").exists());
+    assert!(fs::read_dir(&path)?.any(|entry| {
+        entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("restart-backup-")
+    }));
+    Ok(())
 }
 
 fn session(state: &Desktop, id: &str) -> Result<PathBuf> {
@@ -181,5 +244,33 @@ fn review_keeps_markdown_and_renders_transcript_links() -> Result<()> {
     );
     assert!(document.html.contains(r##"<a href="#">Link externo</a>"##));
     assert!(document.html.contains("&lt;b&gt;Texto literal&lt;/b&gt;"));
+    Ok(())
+}
+
+#[test]
+fn review_and_copy_present_legacy_transcripts_as_complete_paragraphs() -> Result<()> {
+    let root = tempfile::tempdir()?;
+    let path = root.path().join("transcricao.md");
+    let original = concat!(
+        "# Transcript\n\n",
+        "### Segment 0001\n\n**00:00:00.000 – 00:00:01.000**\n\n",
+        "Uma ideia \\*literal\\*\n\n",
+        "### Segment 0002\n\n**00:00:01.000 – 00:00:02.000**\n\n",
+        "que continua aqui.\n\n",
+        "### Segment 0003\n\n**00:00:04.000 – 00:00:05.000**\n\n",
+        "Outro parágrafo.\n\n"
+    );
+    fs::write(&path, original)?;
+    let document = read_document(path.clone())?.unwrap();
+    assert_eq!(
+        document.markdown,
+        "# Transcript\n\nUma ideia \\*literal\\* que continua aqui.\n\nOutro parágrafo.\n"
+    );
+    assert_eq!(
+        document.html,
+        "<h1>Transcript</h1>\n<p>Uma ideia *literal* que continua aqui.</p>\n<p>Outro parágrafo.</p>\n"
+    );
+    assert_eq!(document.segment_paragraphs, [0, 0, 1]);
+    assert_eq!(fs::read_to_string(path)?, original);
     Ok(())
 }

@@ -1,6 +1,6 @@
 [package]
 name = "lovelace"
-version = "0.2.1"
+version = "1.0.2"
 edition = "2024"
 rust-version = "1.90"
 default-run = "lovelace"
@@ -11,7 +11,23 @@ path = "src/bin/desktop.rs"
 required-features = ["desktop"]
 
 [features]
-desktop = ["dep:dunce", "dep:pulldown-cmark", "dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog", "dep:window-vibrancy", "dep:windows-sys", "dep:windows-version"]
+desktop = [
+    "ureq/rustls",
+    "dep:sha2",
+    "dep:zip",
+    "dep:tar",
+    "dep:flate2",
+    "dep:dunce",
+    "dep:pulldown-cmark",
+    "dep:tauri",
+    "dep:tauri-build",
+    "dep:tauri-plugin-dialog",
+    "dep:tauri-plugin-single-instance",
+    "dep:tauri-plugin-window-state",
+    "dep:window-vibrancy",
+    "dep:windows-sys",
+    "dep:windows-version",
+]
 
 [dependencies]
 anyhow = "1"
@@ -20,11 +36,17 @@ cpal = "0.15.3"
 hound = "3.5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = { version = "0.10", optional = true }
+zip = { version = "9", default-features = false, features = ["deflate"], optional = true }
+tar = { version = "0.4", optional = true }
+flate2 = { version = "1", optional = true }
 tempfile = "3"
 ureq = { version = "3", default-features = false, features = ["json"] }
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"], optional = true }
 tauri = { version = "2", features = ["protocol-asset"], optional = true }
 tauri-plugin-dialog = { version = "2", optional = true }
+tauri-plugin-single-instance = { version = "2.5.5", optional = true }
+tauri-plugin-window-state = { version = "2.5.0", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 dunce = { version = "1", optional = true }

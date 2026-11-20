@@ -16,6 +16,7 @@ enum Appearance {
     System,
     Light,
     Dark,
+    Loveless,
 }
 
 impl Appearance {
@@ -23,7 +24,7 @@ impl Appearance {
         match self {
             Self::System => None,
             Self::Light => Some(Theme::Light),
-            Self::Dark => Some(Theme::Dark),
+            Self::Dark | Self::Loveless => Some(Theme::Dark),
         }
     }
 }
@@ -220,6 +221,22 @@ pub(super) fn save_settings(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn loveless_uses_dark_window_chrome_and_survives_reopening() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let path = root.path().join("settings.json");
+        let settings = Preferences {
+            appearance: Appearance::Loveless,
+            ..Preferences::default()
+        };
+        assert_eq!(settings.appearance.native(), Some(Theme::Dark));
+        write_preferences(&path, settings)?;
+        let saved: serde_json::Value = serde_json::from_reader(fs::File::open(&path)?)?;
+        assert_eq!(saved["appearance"], "loveless");
+        assert_eq!(read_preferences(&path)?, settings);
+        Ok(())
+    }
 
     #[test]
     fn first_launch_defaults_and_saved_preferences_survive_reopening() -> Result<()> {

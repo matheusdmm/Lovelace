@@ -171,7 +171,7 @@ fn retry_reuses_whisper_output_and_preserves_an_edited_transcript() -> Result<()
     assert!(error.contains("llama-server missing"), "{error}");
     assert_eq!(
         fs::read_to_string(&transcript)?,
-        "# Transcript\n\n### Segment 0001\n\n**00:01:02.345 – 00:01:03.456**\n\nIdeia \\*principal\\* continua.\n\n"
+        "# Transcript\n\nIdeia \\*principal\\* continua.\n"
     );
     assert!(!path.join("sintese.md").exists());
 
@@ -204,5 +204,70 @@ fn processing_rejects_invalid_whisper_timestamps_without_creating_documents() ->
     assert!(error.contains("Invalid timestamp range"), "{error}");
     assert!(!path.join("transcricao.md").exists());
     assert!(!path.join("sintese.md").exists());
+    Ok(())
+}
+
+#[test]
+fn restart_backs_up_all_results_and_preserves_audio_even_if_engine_is_missing() -> Result<()> {
+    let session = workspace()?;
+    let path = session.path();
+    write_audio(path)?;
+    let audio = fs::read(path.join("audio.wav"))?;
+    for name in ["whisper.json", "transcricao.md", "sintese.md"] {
+        fs::write(path.join(name), format!("previous {name}"))?;
+    }
+    let options = lovelace::ProcessingOptions::desktop(path, Some(lovelace::Language::Pt));
+    let error =
+        lovelace::pipeline::process_mode_with_progress(path, &options, true, |_| {}).unwrap_err();
+    assert!(error.to_string().contains("whisper-cli missing"));
+    assert_eq!(fs::read(path.join("audio.wav"))?, audio);
+    let backup = fs::read_dir(path)?
+        .filter_map(Result::ok)
+        .find(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("restart-backup-")
+        })
+        .unwrap()
+        .path();
+    for name in ["whisper.json", "transcricao.md", "sintese.md"] {
+        assert!(!path.join(name).exists());
+        assert_eq!(
+            fs::read_to_string(backup.join(name))?,
+            format!("previous {name}")
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn restart_does_not_touch_results_while_session_is_locked() -> Result<()> {
+    let session = workspace()?;
+    let path = session.path();
+    write_audio(path)?;
+    fs::write(path.join("transcricao.md"), "Keep this transcript")?;
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path.join(".processar.lock"))?;
+    lock.try_lock()?;
+    let options = lovelace::ProcessingOptions::desktop(path, None);
+    let error =
+        lovelace::pipeline::process_mode_with_progress(path, &options, true, |_| {}).unwrap_err();
+    assert!(error.to_string().contains("Could not lock"));
+    assert_eq!(
+        fs::read_to_string(path.join("transcricao.md"))?,
+        "Keep this transcript"
+    );
+    assert!(!fs::read_dir(path)?.any(|entry| {
+        entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("restart-backup-")
+    }));
     Ok(())
 }

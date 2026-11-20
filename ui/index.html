@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Lovelace</title>
     <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./themes/loveless.css">
     <script type="module" src="./app.js"></script>
 </head>
 <body>
@@ -38,6 +39,9 @@
             <button type="button" class="nav-item" data-view-target="captions">
                 <span class="icon icon-captions" aria-hidden="true"></span> Captions
             </button>
+            <button type="button" id="log-navigation" class="nav-item" data-view-target="log" hidden>
+                <span class="icon icon-captions" aria-hidden="true"></span> Transcription log
+            </button>
             <button type="button" class="nav-item" data-view-target="settings">
                 <span class="icon icon-settings" aria-hidden="true"></span> Settings
             </button>
@@ -55,6 +59,7 @@
             <div class="page-content recording-page">
                 <section class="recorder" aria-labelledby="studio-heading">
                     <h2 id="studio-heading">New recording</h2>
+                    <p id="model-setup-hint" class="model-intro" hidden>Models or engines are missing. <button type="button" class="button quiet" data-view-target="settings">Configure in Settings</button></p>
                     <div class="toolbar" aria-label="Recording controls">
                         <div class="monitor">
                             <div class="monitor-header">
@@ -62,31 +67,35 @@
                             </div>
                             <canvas id="signal-chart" width="900" height="112" aria-hidden="true"></canvas>
                             <div class="monitor-footer">
-                                <span class="icon icon-mic" aria-hidden="true"></span>
-                                <span id="signal-label" data-text="signal-label">System default</span>
-                                <meter id="level" class="visually-hidden" min="0" max="1" value="0"
-                                    aria-label="Audio input level"></meter>
+                                <div class="monitor-input monitor-audio-input">
+                                    <span class="icon icon-mic" aria-hidden="true"></span>
+                                    <label class="visually-hidden" for="audio-input">Audio input</label>
+                                    <select id="audio-input" class="monitor-select" aria-label="Audio input">
+                                        <option value="default">System default</option>
+                                    </select>
+                                    <button type="button" id="refresh-audio-inputs" class="refresh-inputs"
+                                        aria-label="Refresh audio inputs" title="Refresh audio inputs">
+                                        <span aria-hidden="true">&#x21bb;</span>
+                                    </button>
+                                    <meter id="level" class="visually-hidden" min="0" max="1" value="0"
+                                        aria-label="Audio input level"></meter>
+                                </div>
+                                <div class="monitor-input monitor-language">
+                                    <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
+                                        <circle cx="8" cy="8" r="6"></circle>
+                                        <ellipse cx="8" cy="8" rx="2.5" ry="6"></ellipse>
+                                        <path d="M2 8h12"></path>
+                                    </svg>
+                                    <label class="visually-hidden" for="language">Spoken language</label>
+                                    <select id="language" class="monitor-select" title="Spoken language">
+                                        <option value="pt">Portuguese</option>
+                                        <option value="en">English</option>
+                                        <option value="auto">Auto-detect</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                         <div class="record-controls">
-                            <div class="field input-field">
-                                <label for="audio-input">Audio input</label>
-                                <div class="input-controls">
-                                    <select id="audio-input">
-                                        <option value="default">System default</option>
-                                    </select>
-                                    <button type="button" id="refresh-audio-inputs" class="button secondary"
-                                        aria-label="Refresh audio inputs">Refresh</button>
-                                </div>
-                            </div>
-                            <div class="field">
-                                <label for="language">Spoken language</label>
-                                <select id="language">
-                                    <option value="pt">Portuguese</option>
-                                    <option value="en">English</option>
-                                    <option value="auto">Auto-detect</option>
-                                </select>
-                            </div>
                             <button type="button" id="record" class="button primary">
                                 <span class="record-mark" aria-hidden="true"></span>
                                 <span data-text="record-label">Start recording</span>
@@ -120,7 +129,10 @@
                                 <h2 id="session-title" data-text="session-title" tabindex="-1"></h2>
                                 <p id="session-state" data-text="session-state"></p>
                             </div>
-                            <button type="button" id="retry" class="button secondary" hidden>Process session</button>
+                            <div class="session-processing-actions">
+                                <button type="button" id="retry" class="button secondary" hidden>Resume processing</button>
+                                <button type="button" id="restart" class="button secondary" hidden>Restart transcription…</button>
+                            </div>
                         </div>
                         <div class="document-toolbar">
                             <div class="document-picker" role="group" aria-label="Document">
@@ -188,8 +200,60 @@
             </div>
         </section>
 
+        <section class="view page-scroll" data-panel="log" aria-label="Transcription log" hidden>
+            <div id="log-content" class="page-content log-page">
+                <section id="processing-status" class="processing-status" data-phase="idle"
+                    aria-labelledby="processing-heading">
+                    <div class="processing-heading">
+                        <div>
+                            <h3 id="processing-heading">Current job</h3>
+                            <p id="processing-session"></p>
+                            <p id="processing-detail">Waiting for a recording.</p>
+                        </div>
+                        <span id="processing-state" class="status-pill">Ready</span>
+                    </div>
+                    <div class="progress-meta">
+                        <span>Stage-based progress · stays fixed during each stage</span>
+                        <span id="processing-percent">0%</span>
+                    </div>
+                    <div id="processing-progress" class="progress-track" role="progressbar"
+                        aria-label="Transcription progress" aria-valuemin="0" aria-valuemax="100"
+                        aria-valuenow="0" aria-valuetext="Ready to record">
+                        <span id="processing-progress-bar" class="progress-bar"></span>
+                    </div>
+                    <div class="log-actions">
+                        <button type="button" id="log-resume" class="button secondary" hidden>Resume processing</button>
+                        <button type="button" id="log-restart" class="button secondary" hidden>Restart transcription…</button>
+                    </div>
+                    <div class="activity-heading">
+                        <h4>Activity log</h4>
+                        <span id="job-elapsed"></span>
+                    </div>
+                    <ol id="processing-log" class="activity-log" aria-live="polite"
+                        aria-relevant="additions"></ol>
+                    <details id="engine-details" hidden>
+                        <summary>Whisper output</summary>
+                        <pre id="engine-log" class="engine-log" aria-label="Whisper output"></pre>
+                    </details>
+                </section>
+            </div>
+        </section>
+
         <section class="view page-scroll" data-panel="settings" aria-label="Settings" hidden>
             <div class="page-content settings-page">
+                <section class="model-manager" aria-labelledby="models-heading">
+                    <h2 id="models-heading">Models and engines</h2>
+                    <p class="model-intro">Choose a download or browse for an existing file. Downloads are verified and selected automatically. Changes here are saved immediately.</p>
+                    <p id="models-directory" class="model-path"></p>
+                    <div id="model-controls"></div>
+                    <div id="model-transfer" class="model-transfer" hidden>
+                        <p id="model-transfer-status" role="status"></p>
+                        <progress id="model-transfer-progress" max="100" value="0" aria-label="Download progress"></progress>
+                        <button id="cancel-model-download" type="button" class="button secondary">Cancel download</button>
+                    </div>
+                    <p id="models-status" class="model-feedback" role="status"></p>
+                    <p class="model-intro">Whisper models support multiple languages. Summaries use instruction models through llama.cpp. Choose CPU or a GPU backend matching your hardware; only engines for this system and architecture are listed. GPU backends require compatible drivers. Larger models need more memory. FFmpeg is still required for media captions.</p>
+                </section>
                 <form id="settings-form">
                     <fieldset aria-labelledby="appearance-heading">
                         <h2 id="appearance-heading">Appearance</h2>
@@ -199,6 +263,7 @@
                                 <option value="system">System</option>
                                 <option value="light">Light</option>
                                 <option value="dark">Dark</option>
+                                <option value="loveless">Loveless</option>
                             </select>
                         </div>
                         <div class="setting-row">
@@ -241,6 +306,28 @@
         <hr role="separator">
         <button type="button" role="menuitem" data-action="delete" tabindex="-1">Delete session…</button>
     </div>
+
+    <dialog id="delete-model" class="delete-dialog" aria-labelledby="delete-model-title" aria-describedby="delete-model-description">
+        <form method="dialog">
+            <h2 id="delete-model-title">Delete download?</h2>
+            <p id="delete-model-description"></p>
+            <div class="dialog-actions">
+                <button class="button secondary" value="cancel" autofocus>Cancel</button>
+                <button class="button primary" value="delete">Delete download</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="restart-session" class="delete-dialog" aria-labelledby="restart-title" aria-describedby="restart-description">
+        <form method="dialog">
+            <h2 id="restart-title">Restart transcription?</h2>
+            <p id="restart-description">The current attempt will stop and transcription will start from the beginning. Existing results will be backed up in the session folder. Your audio is preserved.</p>
+            <div class="dialog-actions">
+                <button class="button secondary" value="cancel" autofocus>Cancel</button>
+                <button class="button primary" value="restart">Restart transcription</button>
+            </div>
+        </form>
+    </dialog>
 
     <dialog id="delete-session" class="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-description">
         <form method="dialog">

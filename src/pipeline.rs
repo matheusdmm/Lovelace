@@ -1,5 +1,4 @@
 use std::{
-    fmt::Write as _,
     fs::{self, OpenOptions},
     io::{ErrorKind, Write as _},
     path::Path,
@@ -59,6 +58,15 @@ pub fn process_with_progress(
     options: &ProcessingOptions,
     progress: impl Fn(Stage),
 ) -> Result<()> {
+    process_mode_with_progress(session, options, false, progress)
+}
+
+pub fn process_mode_with_progress(
+    session: &Path,
+    options: &ProcessingOptions,
+    restart: bool,
+    progress: impl Fn(Stage),
+) -> Result<()> {
     let wav = session.join("audio.wav");
     ensure!(wav.is_file(), "Audio file missing at {}", wav.display());
     let lock = OpenOptions::new()
@@ -69,6 +77,13 @@ pub fn process_with_progress(
         .open(session.join(".processar.lock"))?;
     lock.try_lock()
         .context("Could not lock the session for processing")?;
+
+    if let Some(control) = &options.transcription.control {
+        control.check()?;
+    }
+    if restart {
+        archive_outputs(session)?;
+    }
 
     let json = session.join("whisper.json");
     let output = match fs::read(&json) {
@@ -87,13 +102,10 @@ pub fn process_with_progress(
     let transcript = session.join("transcricao.md");
     let segment_anchor = if transcript.try_exists()? {
         let markdown = fs::read_to_string(&transcript).context("Could not read the transcript")?;
-        if markdown
-            .lines()
-            .any(|line| line.starts_with("### Segment "))
-        {
-            "segment"
-        } else {
+        if markdown.lines().any(|line| line.starts_with("### Trecho ")) {
             "trecho"
+        } else {
+            "segment"
         }
     } else {
         save(&transcript, render_transcript(segments).as_bytes())?;
@@ -116,7 +128,13 @@ pub fn process_with_progress(
         _ => Language::Auto,
     };
     progress(Stage::Synthesizing);
+    if let Some(control) = &options.transcription.control {
+        control.check()?;
+    }
     let summary = synthesis::generate(session, segments, segment_anchor, language, options)?;
+    if let Some(control) = &options.transcription.control {
+        control.check()?;
+    }
     let summary_path = session.join("sintese.md");
     save(&summary_path, summary.as_bytes())?;
     println!("Summary saved to {}", summary_path.display());
@@ -161,9 +179,36 @@ pub(crate) fn transcribe(
     }
 
     println!("Transcribing with Whisper...");
-    let status = command.status().context("Could not start whisper-cli")?;
+    let logs = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(directory.join("whisper.log"))?;
+    command.arg("--print-progress").stderr(logs);
+    let child = command.spawn().context("Could not start whisper-cli")?;
+    let engine = crate::job::Engine::new(child, options.control.clone())?;
+    let status = engine.wait()?;
     ensure!(status.success(), "whisper-cli exited with {status}");
     fs::read(output.with_extension("json")).context("whisper-cli did not produce the expected JSON")
+}
+
+fn archive_outputs(session: &Path) -> Result<()> {
+    let backup = tempfile::Builder::new()
+        .prefix("restart-backup-")
+        .tempdir_in(session)?
+        .keep();
+    let mut copied = Vec::new();
+    for name in ["whisper.json", "transcricao.md", "sintese.md"] {
+        let source = session.join(name);
+        if source.try_exists()? {
+            fs::copy(&source, backup.join(name)).context("Could not back up previous results")?;
+            copied.push(source);
+        }
+    }
+    // Only invalidate results after every backup has succeeded.
+    for source in copied {
+        fs::remove_file(source)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn parse_whisper(bytes: &[u8]) -> Result<WhisperOutput> {
@@ -182,22 +227,7 @@ pub(crate) fn parse_whisper(bytes: &[u8]) -> Result<WhisperOutput> {
 }
 
 fn render_transcript(segments: &[Segment]) -> String {
-    let mut text = String::from("# Transcript\n\n");
-    if segments.is_empty() {
-        text.push_str("No speech segments found.\n");
-    }
-    for (index, segment) in segments.iter().enumerate() {
-        let id = index + 1;
-        let end = timestamp(segment.offsets.to, '.');
-        let start = segment.start();
-        let speech = markdown_text(&segment.text);
-        writeln!(
-            text,
-            "### Segment {id:04}\n\n**{start} – {end}**\n\n{speech}\n"
-        )
-        .unwrap();
-    }
-    text
+    crate::transcript::from_segments(segments).markdown
 }
 
 pub fn markdown_text(text: &str) -> String {

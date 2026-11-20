@@ -3,7 +3,7 @@
 use std::{
     collections::HashMap,
     env, fs,
-    io::ErrorKind,
+    io::{ErrorKind, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -15,14 +15,15 @@ use std::{
 
 use anyhow::{Context, Result, bail, ensure};
 use cpal::traits::DeviceTrait;
-use lovelace::{
-    Language, ProcessingOptions, TranscriptionOptions, audio, captions, new_session, pipeline,
-};
+use lovelace::{Language, ProcessingOptions, audio, captions, new_session, pipeline};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd, html};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, State, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_window_state::StateFlags;
 
+#[path = "desktop/models.rs"]
+mod models;
 #[path = "desktop/settings.rs"]
 mod settings;
 
@@ -57,16 +58,22 @@ struct Status {
     captions: bool,
     subtitle_path: Option<PathBuf>,
     refresh_audio_inputs: bool,
+    restarting: bool,
+    attempt: u64,
+    engine_log: String,
 }
 
 #[derive(Default)]
 struct Job {
     status: Status,
     stop: Option<mpsc::SyncSender<Result<()>>>,
+    control: Arc<lovelace::job::Control>,
+    restart_language: Option<Language>,
 }
 
 struct Desktop {
     root: PathBuf,
+    models: Arc<models::ModelStore>,
     job: Arc<Mutex<Job>>,
     level: Arc<AtomicU32>,
     audio_inputs: Mutex<AudioInputs>,
@@ -162,21 +169,46 @@ impl Desktop {
     ) -> Result<()> {
         let mut job = self.job.lock().unwrap();
         ensure!(!job.status.phase.busy(), "A session is already in progress");
+        ensure!(
+            !self.models.downloading(),
+            "Finish or cancel the model download in Settings first"
+        );
         let previous = job.status.clone();
         job.status = status;
+        job.status.attempt = previous.attempt + 1;
+        job.control = Arc::default();
+        job.restart_language = None;
         self.level.store(0, Ordering::Relaxed);
 
         let shared = Arc::clone(&self.job);
+        let root = self.root.clone();
+        let models = Arc::clone(&self.models);
         if let Err(error) = thread::Builder::new().name("sessao".into()).spawn(move || {
-            let result = task(&shared);
-            let mut job = shared.lock().unwrap();
-            job.stop = None;
-            match result {
-                Ok(()) => job.status.phase = Phase::Done,
-                Err(error) => {
-                    job.status.phase = Phase::Failed;
-                    job.status.error = Some(format!("{error:#}"));
+            let mut result = task(&shared);
+            loop {
+                let mut job = shared.lock().unwrap();
+                if let Some(language) = job.restart_language.take() {
+                    let id = job.status.session.clone().unwrap();
+                    job.control = Arc::default();
+                    job.status.phase = Phase::Preparing;
+                    job.status.attempt += 1;
+                    job.status.restarting = false;
+                    job.status.error = None;
+                    let mut options = models.processing_options(Some(language));
+                    options.set_control(Arc::clone(&job.control));
+                    drop(job);
+                    result = process_mode(&shared, &root.join("sessoes").join(id), &options, true);
+                    continue;
                 }
+                job.stop = None;
+                match result {
+                    Ok(()) => job.status.phase = Phase::Done,
+                    Err(error) => {
+                        job.status.phase = Phase::Failed;
+                        job.status.error = Some(format!("{error:#}"));
+                    }
+                }
+                break;
             }
         }) {
             job.status = previous;
@@ -220,6 +252,7 @@ impl SessionSource {
 struct Document {
     markdown: String,
     html: String,
+    segment_paragraphs: Vec<usize>,
 }
 
 #[derive(Serialize)]
@@ -290,6 +323,16 @@ fn read_document(path: PathBuf) -> Result<Option<Document>> {
         Err(error) => return Err(error.into()),
     }
     let markdown = fs::read_to_string(&path)?;
+    let (markdown, segment_paragraphs) = if path
+        .file_name()
+        .is_some_and(|name| name == "transcricao.md")
+    {
+        let whisper = fs::read(path.with_file_name("whisper.json")).ok();
+        let transcript = lovelace::transcript::for_review(&markdown, whisper.as_deref());
+        (transcript.markdown, transcript.segment_paragraphs)
+    } else {
+        (markdown, Vec::new())
+    };
     let mut rendered = String::new();
     let events = Parser::new(&markdown).filter_map(|event| match event {
         Event::Html(text) | Event::InlineHtml(text) => Some(Event::Text(text)),
@@ -321,6 +364,7 @@ fn read_document(path: PathBuf) -> Result<Option<Document>> {
     Ok(Some(Document {
         markdown,
         html: rendered,
+        segment_paragraphs,
     }))
 }
 
@@ -447,6 +491,17 @@ async fn review(
 #[tauri::command]
 fn status(state: State<'_, Desktop>) -> Status {
     let mut status = state.job.lock().unwrap().status.clone();
+    if let Some(id) = &status.session {
+        if let Ok(mut file) = fs::File::open(state.sessions().join(id).join("whisper.log")) {
+            if let Ok(metadata) = file.metadata() {
+                let _ = file.seek(SeekFrom::Start(metadata.len().saturating_sub(8192)));
+                let mut bytes = Vec::new();
+                if file.take(8192).read_to_end(&mut bytes).is_ok() {
+                    status.engine_log = String::from_utf8_lossy(&bytes).into_owned();
+                }
+            }
+        }
+    }
     if matches!(status.phase, Phase::Recording) {
         status.level = f32::from_bits(state.level.swap(0, Ordering::Relaxed));
     }
@@ -464,7 +519,16 @@ fn selected_language(language: Option<&str>) -> Result<Option<Language>> {
 }
 
 fn process(job: &Mutex<Job>, session: &Path, options: &ProcessingOptions) -> Result<()> {
-    pipeline::process_with_progress(session, options, |stage| {
+    process_mode(job, session, options, false)
+}
+
+fn process_mode(
+    job: &Mutex<Job>,
+    session: &Path,
+    options: &ProcessingOptions,
+    restart: bool,
+) -> Result<()> {
+    pipeline::process_mode_with_progress(session, options, restart, |stage| {
         job.lock().unwrap().status.phase = match stage {
             pipeline::Stage::Transcribing => Phase::Transcribing,
             pipeline::Stage::Synthesizing => Phase::Synthesizing,
@@ -506,7 +570,7 @@ fn generate_captions(
     state: State<'_, Desktop>,
 ) -> Result<(), String> {
     let language = selected_language(Some(&language)).map_err(error_message)?;
-    let transcription = TranscriptionOptions::desktop(&state.root, language);
+    let models = Arc::clone(&state.models);
     state
         .launch_job(
             Status {
@@ -515,6 +579,7 @@ fn generate_captions(
                 ..Status::default()
             },
             move |job| {
+                let transcription = models.transcription_options(language);
                 let subtitle = captions::generate(
                     &media,
                     None,
@@ -576,7 +641,7 @@ fn start_recording(
     state: State<'_, Desktop>,
 ) -> Result<(), String> {
     let language = selected_language(Some(&language)).map_err(error_message)?;
-    let options = ProcessingOptions::desktop(&state.root, language);
+    let models = Arc::clone(&state.models);
     let sessions = state.sessions();
     let level = Arc::clone(&state.level);
     let input = input_id.map(|id| {
@@ -621,6 +686,8 @@ fn start_recording(
                     job.lock().unwrap().status.refresh_audio_inputs = true;
                 }
             })?;
+            let mut options = models.processing_options(language);
+            options.set_control(Arc::clone(&job.lock().unwrap().control));
             process(job, &session, &options)
         })
         .map_err(error_message)
@@ -642,20 +709,61 @@ fn stop_recording(state: State<'_, Desktop>) -> Result<(), String> {
 
 #[tauri::command]
 fn retry(id: String, language: String, state: State<'_, Desktop>) -> Result<(), String> {
-    let session = state.session(&id).map_err(error_message)?;
-    wave_file(&session).map_err(error_message)?;
-    let language = if session.join("whisper.json").is_file() {
+    start_session_processing(id, language, false, &state).map_err(error_message)
+}
+
+#[tauri::command]
+fn restart(id: String, language: String, state: State<'_, Desktop>) -> Result<(), String> {
+    start_session_processing(id, language, true, &state).map_err(error_message)
+}
+
+fn start_session_processing(
+    id: String,
+    language: String,
+    restart: bool,
+    state: &Desktop,
+) -> Result<()> {
+    let session = state.session(&id)?;
+    wave_file(&session)?;
+    let selected = selected_language(Some(&language))?;
+    {
+        let mut job = state.job.lock().unwrap();
+        if job.status.phase.busy() {
+            ensure!(
+                restart
+                    && !job.status.captions
+                    && job.status.session.as_deref() == Some(&id)
+                    && matches!(
+                        job.status.phase,
+                        Phase::Preparing | Phase::Transcribing | Phase::Synthesizing
+                    ),
+                "Wait for the active job to finish"
+            );
+            ensure!(!job.status.restarting, "Restart already requested");
+            job.restart_language = selected;
+            job.status.restarting = true;
+            job.control.cancel()?;
+            return Ok(());
+        }
+    }
+    let language = if !restart && session.join("whisper.json").is_file() {
         None
     } else {
-        selected_language(Some(&language)).map_err(error_message)?
+        selected
     };
-    let options = ProcessingOptions::desktop(&state.root, language);
-    state
-        .launch(Phase::Preparing, move |job| {
-            job.lock().unwrap().status.session = Some(id);
-            process(job, &session, &options)
-        })
-        .map_err(error_message)
+    let models = Arc::clone(&state.models);
+    state.launch_job(
+        Status {
+            phase: Phase::Preparing,
+            session: Some(id),
+            ..Status::default()
+        },
+        move |job| {
+            let mut options = models.processing_options(language);
+            options.set_control(Arc::clone(&job.lock().unwrap().control));
+            process_mode(job, &session, &options, restart)
+        },
+    )
 }
 
 fn project_root() -> Result<PathBuf> {
@@ -672,10 +780,29 @@ fn project_root() -> Result<PathBuf> {
 
 fn main() {
     tauri::Builder::default()
+        // The single-instance plugin must be registered first.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            let root = project_root()?;
+            let models = Arc::new(models::ModelStore::new(
+                root.clone(),
+                app.path().app_data_dir()?.join("resources"),
+                app.path().app_config_dir()?.join("models.json"),
+            )?);
             app.manage(Desktop {
-                root: project_root()?,
+                root,
+                models,
                 job: Arc::default(),
                 level: Arc::default(),
                 audio_inputs: Mutex::default(),
@@ -689,12 +816,21 @@ fn main() {
                 if state.job.lock().unwrap().status.phase.busy() {
                     api.prevent_close();
                     let _ = window.emit("session-active", ());
+                } else if state.models.downloading() {
+                    api.prevent_close();
+                    let _ = window.emit("model-download-active", ());
                 }
             }
         })
         .invoke_handler(tauri::generate_handler![
             settings::get_settings,
             settings::save_settings,
+            models::get_models,
+            models::download_model,
+            models::cancel_model_download,
+            models::use_model_path,
+            models::delete_model,
+            models::pick_model_file,
             history,
             set_favorite,
             delete_session,
@@ -706,7 +842,8 @@ fn main() {
             stop_recording,
             pick_caption_media,
             generate_captions,
-            retry
+            retry,
+            restart
         ])
         .run(tauri::generate_context!())
         .expect("Could not start Lovelace");

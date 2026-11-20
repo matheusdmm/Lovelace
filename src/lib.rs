@@ -1,7 +1,9 @@
 pub mod audio;
 pub mod captions;
+pub mod job;
 pub mod pipeline;
 mod synthesis;
+pub mod transcript;
 
 use std::{
     fs,
@@ -39,6 +41,8 @@ pub struct ProcessingOptions {
 
 #[derive(Args)]
 pub struct TranscriptionOptions {
+    #[arg(skip)]
+    pub(crate) control: Option<std::sync::Arc<job::Control>>,
     /// Spoken language. Defaults to pt for new recordings.
     #[arg(long = "language", alias = "idioma", value_enum)]
     pub idioma: Option<Language>,
@@ -72,6 +76,14 @@ impl Language {
 }
 
 impl ProcessingOptions {
+    pub fn set_summary_paths(&mut self, engine: PathBuf, model: PathBuf) {
+        self.llama = engine;
+        self.modelo_llama = model;
+    }
+
+    pub fn set_control(&mut self, control: std::sync::Arc<job::Control>) {
+        self.transcription.control = Some(control);
+    }
     pub fn desktop(root: &Path, idioma: Option<Language>) -> Self {
         Self {
             transcription: TranscriptionOptions::desktop(root, idioma),
@@ -82,8 +94,14 @@ impl ProcessingOptions {
 }
 
 impl TranscriptionOptions {
+    pub fn set_paths(&mut self, engine: PathBuf, model: PathBuf) {
+        self.whisper = engine;
+        self.modelo_whisper = model;
+    }
+
     pub fn desktop(root: &Path, idioma: Option<Language>) -> Self {
         Self {
+            control: None,
             idioma,
             cpu: false,
             whisper: root.join(WHISPER),

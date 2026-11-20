@@ -1,0 +1,119 @@
+/* Loveless: plum shadows, saturated pink light, and a softly blurred signal. */
+:root[data-appearance="loveless"] {
+  color-scheme: dark;
+  --surface: #21131e;
+  --sidebar: #190e18;
+  --raised: #2c1928;
+  --hover: #382034;
+  --selected: #4c2241;
+  --ink: #faedf5;
+  --muted: #c7a6bd;
+  --line: #493044;
+  --control-line: #87607c;
+  --accent: #f599cd;
+  --accent-hover: #ffb5de;
+  --on-accent: #381029;
+  --focus: #ffb5de;
+  --monitor: #3a102e;
+  --monitor-ink: #fff0f8;
+  --monitor-muted: #f0b9d9;
+  --monitor-line: #874268;
+  --wave: #ffc1e5;
+  --brand-ground: #a42570;
+  --brand-ink: #ffe4f3;
+}
+
+:root[data-appearance="loveless"] .brand-mark > rect,
+:root[data-appearance="loveless"] .brand-mark > g:last-child {
+  fill: var(--brand-ground);
+}
+
+:root[data-appearance="loveless"] .brand-mark > g:first-of-type {
+  fill: var(--brand-ink);
+}
+
+:root[data-appearance="loveless"] .sidebar {
+  background-image: linear-gradient(165deg, #8b22551c, transparent 48%);
+}
+
+:root[data-appearance="loveless"] .nav-item[aria-current="page"] {
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+/* Keep the haze behind the signal and controls, never over their text. */
+:root[data-appearance="loveless"] .monitor {
+  position: relative;
+  isolation: isolate;
+  border-color: var(--monitor-line);
+  background:
+    radial-gradient(ellipse at 82% 5%, #ee4da969, transparent 58%),
+    radial-gradient(ellipse at 18% 100%, #b8196b61, transparent 62%),
+    linear-gradient(112deg, #300d29, #65123f 54%, #3c0d32);
+  box-shadow: inset 0 1px #ffbedc1a, 0 8px 32px #10061133;
+}
+
+:root[data-appearance="loveless"] .monitor::before {
+  position: absolute;
+  z-index: -1;
+  inset: -45%;
+  transform: rotate(-19deg);
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0 23px,
+    #ff88c91f 24px 27px,
+    #f065ad30 28px 33px,
+    transparent 36px 54px
+  );
+  filter: blur(7px);
+  pointer-events: none;
+  content: "";
+}
+
+:root[data-appearance="loveless"] .monitor::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, #ffc1e507 0 1px, transparent 1px 3px);
+  pointer-events: none;
+  content: "";
+}
+
+:root[data-appearance="loveless"] .monitor time {
+  text-shadow: 0 0 22px #ff8bcc3d;
+}
+
+:root[data-appearance="loveless"] #signal-chart {
+  color: #e6a0c222;
+}
+
+:root[data-appearance="loveless"] .button.primary {
+  box-shadow: 0 2px 12px #ed62ae18;
+  transition: background-color 160ms, box-shadow 160ms;
+}
+
+:root[data-appearance="loveless"] .button.primary:hover:not(:disabled) {
+  box-shadow: 0 3px 18px #ed62ae38;
+}
+
+:root[data-appearance="loveless"] #record[data-recording="true"] {
+  background: var(--selected);
+  color: var(--accent-hover);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px #f599cd14;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-appearance="loveless"] .button.primary { transition: none; }
+}
+
+@media (forced-colors: active) {
+  :root[data-appearance="loveless"] .sidebar,
+  :root[data-appearance="loveless"] .monitor { background: Canvas; }
+  :root[data-appearance="loveless"] .monitor { color: CanvasText; border-color: CanvasText; }
+  :root[data-appearance="loveless"] .monitor::before,
+  :root[data-appearance="loveless"] .monitor::after { display: none; }
+  :root[data-appearance="loveless"] #signal-chart { color: CanvasText; --wave: CanvasText; }
+  :root[data-appearance="loveless"] .brand-mark > rect,
+  :root[data-appearance="loveless"] .brand-mark > g:last-child { fill: CanvasText; }
+  :root[data-appearance="loveless"] .brand-mark > g:first-of-type { fill: Canvas; }
+}

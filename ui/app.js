@@ -23,7 +23,13 @@ const record = byId("record");
 const language = byId("language");
 const audioInput = byId("audio-input");
 const refreshInputs = byId("refresh-audio-inputs");
-const signalLabel = textNodes.get("signal-label");
+const processingStatus = byId("processing-status");
+const processingState = byId("processing-state");
+const processingDetail = byId("processing-detail");
+const processingPercent = byId("processing-percent");
+const processingProgress = byId("processing-progress");
+const processingProgressBar = byId("processing-progress-bar");
+const processingLog = byId("processing-log");
 const captionMedia = byId("caption-media");
 const captionBrowse = byId("pick-caption-media");
 const captionLanguage = byId("caption-language");
@@ -32,6 +38,10 @@ const captionSubmit = byId("generate-captions");
 const captionStatus = byId("caption-status");
 const captionOutput = byId("caption-output");
 const retry = byId("retry");
+const restart = byId("restart");
+const restartDialog = byId("restart-session");
+const logResume = byId("log-resume");
+const logRestart = byId("log-restart");
 const copy = byId("copy");
 const audio = byId("audio");
 const play = byId("play");
@@ -48,10 +58,22 @@ const backdropSetting = byId("setting-backdrop");
 const languageSetting = byId("setting-language");
 const settingsSave = byId("save-settings");
 const settingsStatus = byId("settings-status");
+const modelControls = byId("model-controls");
+const modelsStatus = byId("models-status");
+const deleteModelDialog = byId("delete-model");
+const modelGroups = new Map();
+let modelSnapshot;
+let modelActionPending = false;
+let modelRefreshTimer;
+let modelRefreshGeneration = 0;
+let pendingModelDeletion;
 
 const dateFormat = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long" });
 const sessionDateFormat = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", year: "numeric" });
 const timeFormat = new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit" });
+const logTimeFormat = new Intl.DateTimeFormat("en-US", {
+  hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+});
 const titleFormat = new Intl.DateTimeFormat("en-US", {
   day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
 });
@@ -68,7 +90,30 @@ const phases = {
   done: "Session ready",
   failed: "Session interrupted",
 };
-const viewTitles = { record: "Recorder", sessions: "Sessions", captions: "Captions", settings: "Settings" };
+const phaseDetails = {
+  idle: "Waiting for a recording.",
+  starting: "Connecting to the selected audio input.",
+  recording: "Capturing audio from the selected input.",
+  saving: "Closing and saving the WAV recording.",
+  preparing: "Preparing the recorded session for processing.",
+  extracting: "Extracting and normalizing the audio track.",
+  transcribing: "Converting speech into text with the local model.",
+  synthesizing: "Creating the digested summary from the transcript.",
+  done: "The transcript and summary are ready.",
+  failed: "Processing stopped before completion.",
+};
+const phaseProgress = {
+  idle: 0,
+  starting: 8,
+  recording: 18,
+  saving: 28,
+  preparing: 38,
+  extracting: 52,
+  transcribing: 72,
+  synthesizing: 90,
+  done: 100,
+};
+const viewTitles = { record: "Recorder", sessions: "Sessions", captions: "Captions", log: "Transcription log", settings: "Settings" };
 
 let sessions = [];
 let selected = null;
@@ -86,6 +131,10 @@ let copyTimeout;
 let preferences;
 let pickingCaptionMedia = false;
 let loadingAudioInputs = false;
+let processingProgressValue = 0;
+let jobState = { phase: "idle" };
+let pendingRestart = null;
+let jobStartedAt = 0;
 
 const isBusy = () => !["idle", "done", "failed"].includes(phase);
 
@@ -108,7 +157,162 @@ function showView(view) {
     }
   }
   updateActiveJob();
+  if (view === "settings") void refreshModels();
   viewHeading?.focus({ preventScroll: true });
+}
+
+const modelKinds = {
+  whisper_model: "Whisper · transcription model",
+  llama_model: "llama.cpp · summary model",
+  whisper_engine: "whisper.cpp · engine",
+  llama_engine: "llama.cpp · engine",
+};
+const downloadBusy = () => ["downloading", "installing", "cancelling"].includes(modelSnapshot?.download.stage);
+const formatBytes = (bytes) => bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2)} GB` : `${(bytes / 1e6).toFixed(1)} MB`;
+const assetBytes = (asset) => asset.download_size ?? asset.size;
+
+function setupModelControls() {
+  for (const [kind, title] of Object.entries(modelKinds)) {
+    const group = document.createElement("div");
+    group.className = "model-group";
+    const label = document.createElement("label");
+    const select = document.createElement("select");
+    select.id = `model-${kind}`;
+    label.htmlFor = select.id;
+    label.textContent = title;
+    const meta = document.createElement("p");
+    meta.className = "model-meta";
+    const requirements = document.createElement("p");
+    requirements.className = "model-meta";
+    requirements.id = `model-requirements-${kind}`;
+    const path = document.createElement("p");
+    path.className = "model-path";
+    path.id = `model-path-${kind}`;
+    select.setAttribute("aria-describedby", `${requirements.id} ${path.id}`);
+    const actions = document.createElement("div");
+    actions.className = "model-actions";
+    const makeButton = (text, handler) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "button secondary";
+      button.textContent = text;
+      button.addEventListener("click", handler);
+      actions.append(button);
+      return button;
+    };
+    const install = makeButton("Download & use", () => {
+      const asset = modelSnapshot?.catalog.find((asset) => asset.id === select.value);
+      if (!asset || install.disabled) return;
+      void modelAction(asset.path ? "use_model_path" : "download_model", asset.path ? { kind, path: asset.path } : { id: asset.id });
+    });
+    const browse = makeButton("Browse…", () => void browseModel(kind));
+    const remove = makeButton("Delete download…", () => {
+      const asset = modelSnapshot?.catalog.find((asset) => asset.id === select.value);
+      if (!asset?.path || remove.disabled) return;
+      pendingModelDeletion = asset.id;
+      byId("delete-model-description").textContent = `Delete ${asset.label} (${formatBytes(assetBytes(asset))} download) from Lovelace storage? If selected, its selection will return to the default path. You can download it again later.`;
+      deleteModelDialog.returnValue = "";
+      deleteModelDialog.showModal();
+    });
+    const reset = makeButton("Use default path", () => void modelAction("use_model_path", { kind, path: null }));
+    group.append(label, select, requirements, meta, path, actions);
+    modelControls.append(group);
+    modelGroups.set(kind, { select, requirements, meta, path, install, browse, remove, reset, signature: "" });
+    select.addEventListener("change", renderModels);
+  }
+}
+
+function renderModels() {
+  if (!modelSnapshot) return;
+  byId("model-setup-hint").hidden = modelSnapshot.active.every((active) => active.exists);
+  const busy = modelActionPending || downloadBusy() || modelSnapshot.job_busy;
+  for (const [kind, controls] of modelGroups) {
+    const assets = modelSnapshot.catalog.filter((asset) => asset.kind === kind);
+    const active = modelSnapshot.active.find((active) => active.kind === kind);
+    const signature = JSON.stringify(assets.map((asset) => [asset.id, asset.path]));
+    if (signature !== controls.signature) {
+      const chosen = controls.select.value;
+      controls.select.replaceChildren(...assets.map((asset) => new Option(`${asset.label} · ${formatBytes(assetBytes(asset))}${asset.path ? " · installed" : ""}`, asset.id)));
+      const selected = assets.find((asset) => asset.id === chosen) || assets.find((asset) => asset.path === active?.path)
+        || assets.find((asset) => ["whisper-small", "qwen-3b"].includes(asset.id)) || assets[0];
+      controls.select.value = selected?.id || "";
+      controls.signature = signature;
+    }
+    const asset = assets.find((asset) => asset.id === controls.select.value);
+    const inUse = asset?.path && asset.path === active?.path;
+    controls.path.textContent = `Selected${active?.exists ? "" : " · missing"}: ${active?.path || "No file selected"}`;
+    controls.requirements.textContent = asset?.notes || (kind === "llama_engine" ? "Choose a backend for your graphics hardware, or CPU to run without a GPU." : "");
+    controls.requirements.hidden = !controls.requirements.textContent;
+    controls.meta.textContent = asset ? `${asset.license} · ${asset.source}` : "No bundled download for this system and architecture. Browse to use a local engine.";
+    controls.install.textContent = inUse ? "Selected" : asset?.path ? "Use model / engine" : "Download & use";
+    controls.install.disabled = busy || !asset || Boolean(inUse);
+    controls.select.disabled = busy || !assets.length;
+    controls.browse.disabled = busy;
+    controls.reset.disabled = busy;
+    controls.remove.disabled = busy || !asset?.path;
+  }
+  byId("models-directory").textContent = `Download folder: ${modelSnapshot.directory}`;
+  const transfer = modelSnapshot.download;
+  const hasTransfer = Boolean(transfer.id);
+  byId("model-transfer").hidden = !hasTransfer;
+  const asset = modelSnapshot.catalog.find((asset) => asset.id === transfer.id);
+  const percent = transfer.total ? Math.min(100, Math.floor(transfer.received / transfer.total * 100)) : 0;
+  const transferText = {
+    downloading: `${asset?.label || "Downloading"}: ${percent}% · ${formatBytes(transfer.received)} / ${formatBytes(transfer.total)}`,
+    installing: "Download verified. Installing…",
+    cancelling: "Cancelling download…",
+    done: "Download installed and selected. Ready to use.",
+    cancelled: "Download cancelled. Temporary files removed.",
+    failed: transfer.error || "Download failed. Please retry.",
+  };
+  byId("model-transfer-status").textContent = transferText[transfer.stage] || "";
+  byId("model-transfer-progress").value = percent;
+  byId("model-transfer-progress").hidden = !downloadBusy();
+  byId("cancel-model-download").hidden = !downloadBusy();
+  byId("cancel-model-download").disabled = modelActionPending || transfer.stage === "cancelling";
+}
+
+async function refreshModels() {
+  clearTimeout(modelRefreshTimer);
+  const generation = ++modelRefreshGeneration;
+  try {
+    const snapshot = await invoke("get_models");
+    if (generation !== modelRefreshGeneration) return;
+    modelSnapshot = snapshot;
+    renderModels();
+  } catch (error) {
+    if (generation === modelRefreshGeneration) modelsStatus.textContent = `Could not load models. ${error}`;
+  } finally {
+    if (generation === modelRefreshGeneration && (workspace.dataset.view === "settings" || downloadBusy())) modelRefreshTimer = setTimeout(refreshModels, 750);
+  }
+}
+
+async function modelAction(command, args) {
+  if (modelActionPending) return;
+  modelActionPending = true;
+  modelsStatus.textContent = "";
+  renderModels();
+  try {
+    await invoke(command, args);
+    modelsStatus.textContent = command === "download_model" ? "Download started. You can cancel it below."
+      : command === "delete_model" ? "Download deleted." : command === "cancel_model_download" ? "Cancelling…" : "Selection saved.";
+  } catch (error) {
+    modelsStatus.textContent = String(error);
+  } finally {
+    modelActionPending = false;
+    await refreshModels();
+  }
+}
+
+async function browseModel(kind) {
+  if (modelActionPending || downloadBusy() || modelSnapshot?.job_busy) return;
+  modelActionPending = true;
+  renderModels();
+  let path;
+  try { path = await invoke("pick_model_file", { kind }); }
+  catch (error) { modelsStatus.textContent = String(error); }
+  finally { modelActionPending = false; renderModels(); }
+  if (path) await modelAction("use_model_path", { kind, path });
 }
 
 function updateActiveJob(view) {
@@ -134,10 +338,67 @@ function renderRecordingControls() {
 }
 
 function showInputName() {
-  if (!signalLabel) return;
   const name = audioInput.selectedOptions[0]?.text ?? "";
-  renderText("signal-label", name);
-  signalLabel.title = name;
+  audioInput.title = name;
+}
+
+function appendProcessingLog(message, tone = "") {
+  const item = document.createElement("li");
+  if (tone) item.dataset.tone = tone;
+  const timestamp = document.createElement("time");
+  const now = new Date();
+  timestamp.dateTime = now.toISOString();
+  timestamp.textContent = logTimeFormat.format(now);
+  const text = document.createElement("span");
+  text.textContent = message;
+  item.append(timestamp, text);
+  processingLog.append(item);
+  while (processingLog.children.length > 10) processingLog.firstElementChild.remove();
+  processingLog.scrollTop = processingLog.scrollHeight;
+}
+
+function clearProcessingLog() {
+  processingLog.replaceChildren();
+}
+
+function renderProcessingStatus(state, changed, previousPhase, beginsAttempt = false) {
+  const nextPhase = state.phase;
+  const beginsJob = beginsAttempt || changed
+    && ["idle", "done", "failed"].includes(previousPhase)
+    && ["starting", "preparing", "extracting"].includes(nextPhase);
+  if (beginsJob) {
+    clearProcessingLog();
+    processingProgressValue = 0;
+    jobStartedAt = performance.now();
+  }
+  if (nextPhase !== "idle") byId("log-navigation").hidden = false;
+  if (nextPhase !== "idle" && !jobStartedAt) jobStartedAt = performance.now();
+  byId("processing-session").textContent = state.session || (state.captions ? "Caption job" : "New recording");
+  if (jobStartedAt) byId("job-elapsed").textContent = `Elapsed ${clock((performance.now() - jobStartedAt) / 1000)}`;
+  logResume.hidden = !state.session || state.captions || nextPhase !== "failed";
+  logResume.disabled = pendingCommand || isBusy();
+  logRestart.hidden = !state.session || state.captions;
+  logRestart.disabled = !canRestart(state.session);
+  byId("engine-details").hidden = !state.engine_log;
+  byId("engine-log").textContent = state.engine_log || "";
+  if (phaseProgress[nextPhase] !== undefined) {
+    processingProgressValue = phaseProgress[nextPhase];
+  }
+
+  processingStatus.dataset.phase = nextPhase;
+  processingState.textContent = phases[nextPhase];
+  processingDetail.textContent = state.restarting ? "Stopping the engine before restarting transcription…" : state.error || phaseDetails[nextPhase];
+  processingPercent.textContent = `${processingProgressValue}%`;
+  processingProgress.setAttribute("aria-valuenow", processingProgressValue);
+  processingProgress.setAttribute("aria-valuetext", phases[nextPhase]);
+  processingProgressBar.style.width = `${processingProgressValue}%`;
+
+  if (changed && nextPhase !== "idle") {
+    appendProcessingLog(
+      state.error || phaseDetails[nextPhase],
+      nextPhase === "failed" ? "error" : nextPhase === "done" ? "success" : "",
+    );
+  }
 }
 
 function renderAudioInputs(inputs, selectDefault) {
@@ -484,11 +745,16 @@ function showDocument(kind) {
   }
   retry.hidden = !opened || Boolean(opened.summary);
   retry.disabled = isBusy() || pendingCommand;
+  restart.hidden = !opened;
+  restart.disabled = !canRestart(selected?.id);
   const data = opened?.[kind];
   if (data) {
     // The Rust backend renders Markdown and restricts HTML and links.
     article.innerHTML = data.html;
     if (kind === "transcript") {
+      article.querySelectorAll("p").forEach((paragraph, index) => {
+        paragraph.id = `transcript-paragraph-${index}`;
+      });
       for (const heading of article.querySelectorAll("h3")) {
         const match = /^(?:Segment|Trecho) (\d+)$/.exec(heading.textContent);
         if (match) heading.id = `segment-${match[1]}`;
@@ -537,7 +803,10 @@ function jumpToExcerpt(event) {
   if (!target || !opened?.transcript) return;
   const time = /^(\d+):(\d{2}):(\d{2}(?:\.\d+)?)$/.exec(link.textContent.trim());
   showDocument("transcript");
-  const heading = document.getElementById(`segment-${target[1]}`);
+  const paragraph = opened.transcript.segment_paragraphs?.[Number(target[1]) - 1];
+  const heading = document.getElementById(paragraph === undefined
+    ? `segment-${target[1]}`
+    : `transcript-paragraph-${paragraph}`);
   if (heading) {
     heading.classList.add("highlight");
     heading.tabIndex = -1;
@@ -602,17 +871,29 @@ function renderSignal(recording, sample) {
 }
 
 function renderStatus(state) {
+  const attemptChanged = state.attempt !== undefined && state.attempt !== jobState.attempt;
+  if (attemptChanged && isBusy() && jobStartedAt) {
+    appendProcessingLog("Starting a new transcription attempt. Previous results are backed up.");
+    jobStartedAt = performance.now();
+  }
+  const restartChanged = state.restarting && !jobState.restarting;
+  jobState = state;
+  if (restartChanged) appendProcessingLog("Restart requested. Waiting for the engine to stop.");
   const recording = state.phase === "recording";
-  const changed = phase !== state.phase;
+  const previousPhase = phase;
+  const changed = phase !== state.phase || attemptChanged;
   if (recording && changed) recordingSince = performance.now();
   phase = state.phase;
-  updateActiveJob(state.captions ? "captions" : "record");
+  const beginsAttempt = attemptChanged && state.phase !== "idle" && ["idle", "done", "failed"].includes(previousPhase);
+  renderProcessingStatus(state, changed, previousPhase, beginsAttempt);
+  updateActiveJob(recording || phase === "starting" ? "record" : "log");
   const recordLabel = recording ? "Stop recording" : "Start recording";
   renderText("record-label", recordLabel);
   record.setAttribute("aria-label", recordLabel);
   record.dataset.recording = String(recording);
   renderRecordingControls();
   retry.disabled = pendingCommand || isBusy();
+  restart.disabled = !canRestart(selected?.id);
   const captionBusy = state.captions && isBusy();
   captionMedia.disabled = captionBusy;
   captionBrowse.disabled = captionBusy || pickingCaptionMedia;
@@ -660,7 +941,9 @@ async function poll(force = false) {
       if (!state.captions || !selected) await refreshHistory(state.session);
     }
   } catch (error) {
-    showMessage(String(error));
+    const detail = String(error);
+    showMessage(detail);
+    appendProcessingLog(detail, "error");
   }
 }
 
@@ -670,6 +953,7 @@ async function command(name, args) {
   pollGeneration++;
   renderRecordingControls();
   retry.disabled = true;
+  restart.disabled = logRestart.disabled = logResume.disabled = true;
   captionSubmit.disabled = true;
   clearTimeout(pollTimeout);
   showMessage();
@@ -678,7 +962,9 @@ async function command(name, args) {
     await invoke(name, args);
     submitted = true;
   } catch (error) {
-    showMessage(String(error));
+    const detail = String(error);
+    showMessage(detail);
+    appendProcessingLog(detail, "error");
   } finally {
     pendingCommand = false;
     await poll(submitted);
@@ -763,6 +1049,13 @@ record.addEventListener("click", () => {
   }
 });
 captionBrowse.addEventListener("click", pickCaptionMedia);
+setupModelControls();
+byId("cancel-model-download").addEventListener("click", () => void modelAction("cancel_model_download", {}));
+deleteModelDialog.addEventListener("close", () => {
+  const id = pendingModelDeletion;
+  pendingModelDeletion = null;
+  if (deleteModelDialog.returnValue === "delete" && id) void modelAction("delete_model", { id });
+});
 settingsForm.addEventListener("submit", saveSettings);
 settingsForm.addEventListener("change", () => { settingsStatus.textContent = ""; });
 byId("captions-form").addEventListener("submit", (event) => {
@@ -774,7 +1067,33 @@ byId("captions-form").addEventListener("submit", (event) => {
   });
 });
 retry.addEventListener("click", () => {
-  if (selected && !isBusy()) void command("retry", { id: selected.id, language: language.value });
+  if (selected && !isBusy()) {
+    showView("log");
+    void command("retry", { id: selected.id, language: language.value });
+  }
+});
+function canRestart(id) {
+  return Boolean(id) && !pendingCommand && !jobState.restarting && (!isBusy()
+    || (!jobState.captions && jobState.session === id && ["preparing", "transcribing", "synthesizing"].includes(phase)));
+}
+function requestRestart(id) {
+  if (!canRestart(id)) return;
+  pendingRestart = { id, language: language.value };
+  restartDialog.returnValue = "";
+  restartDialog.showModal();
+}
+restart.addEventListener("click", () => requestRestart(selected?.id));
+logRestart.addEventListener("click", () => requestRestart(jobState.session));
+logResume.addEventListener("click", () => {
+  if (jobState.session && !isBusy()) void command("retry", { id: jobState.session, language: language.value });
+});
+restartDialog.addEventListener("close", () => {
+  const args = pendingRestart;
+  pendingRestart = null;
+  if (restartDialog.returnValue === "restart" && args && canRestart(args.id)) {
+    showView("log");
+    void command("restart", args);
+  }
 });
 for (const button of buttons) {
   button.addEventListener("click", () => showDocument(button.dataset.document));
@@ -809,6 +1128,10 @@ void window.__TAURI__.event.listen("session-active", () => {
     ? "Stop recording before closing Lovelace."
     : "Wait for the session to finish before closing Lovelace.");
 }).catch((error) => console.error(error));
+void window.__TAURI__.event.listen("model-download-active", () => {
+  showView("settings");
+  showMessage("Finish or cancel the download before closing Lovelace.");
+}).catch((error) => console.error(error));
 void window.__TAURI__.webview.getCurrentWebview().onDragDropEvent(({ payload }) => {
   if (payload.type !== "drop" || workspace.dataset.view !== "captions" || captionMedia.disabled) return;
   if (payload.paths.length !== 1) {
@@ -821,4 +1144,5 @@ void window.__TAURI__.webview.getCurrentWebview().onDragDropEvent(({ payload }) 
 }).catch((error) => console.error(error));
 void poll();
 void loadSettings();
+void refreshModels();
 void refreshAudioInputs();
