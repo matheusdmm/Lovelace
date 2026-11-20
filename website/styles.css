@@ -647,6 +647,9 @@ img {
 .source-list code {
   font-size: 0.82em;
 }
+.workflow-details {
+  margin-top: 32px;
+}
 .source-status {
   margin-top: 14px;
 }
@@ -727,6 +730,49 @@ code {
   margin-bottom: 8px;
   font-size: 1.24rem;
   letter-spacing: -0.03em;
+}
+.manual-setup {
+  margin-top: 16px;
+}
+.manual-setup summary {
+  width: fit-content;
+  color: var(--wine);
+  cursor: pointer;
+  line-height: 1.55;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.manual-setup[open] summary {
+  margin-bottom: 12px;
+}
+.backend-table {
+  width: 100%;
+  margin-top: 16px;
+  border-collapse: collapse;
+  text-align: left;
+  line-height: 1.55;
+}
+.backend-table caption {
+  margin-bottom: 10px;
+  color: var(--muted);
+  text-align: left;
+  font-size: 0.875rem;
+}
+.backend-table th,
+.backend-table td {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.backend-table th {
+  font-weight: 650;
+}
+.backend-table tr > :first-child {
+  width: 10rem;
+  padding-right: 16px;
+}
+.backend-table td {
+  color: var(--muted);
 }
 .engine-list {
   margin-top: 13px;
@@ -861,6 +907,10 @@ code {
   }
   .engine-list li > span {
     grid-column: 1;
+  }
+  .backend-table tr > :first-child {
+    width: 7rem;
+    padding-right: 12px;
   }
 }
 

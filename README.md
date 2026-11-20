@@ -3,18 +3,15 @@
 
 Lovelace is an idea recorder for Windows and Linux that produces transcripts and summaries in Markdown. Each summary note links to the transcript segments that support it. Lovelace also generates timestamped SRT subtitles from video and audio files, including finished OBS Studio recordings. Media processing and inference stay on your machine.
 
-The [Lovelace website](website/) includes downloads, an audit guide, and instructions for building and running the app. See the [website README](website/README.md) for the Coolify configuration, Docker commands, and release link settings.
+## Features
+
+- Record from the system default microphone or choose an audio input, with a live input-level chart and recording timer.
+- Generate full-text transcripts and summary notes with timestamp links for reviewing the original audio.
+- Download and manage verified models and engines inside the desktop app, select a CPU or GPU backend for llama.cpp, or bring your own files.
+- Browse sessions, keep favorites at the top, open the original Markdown files and resume or restart processing.
+- Generate SRT captions from audio and video files through the desktop app, CLI or OBS Studio script.
 
 ## Binaries
-
-The [Build binaries workflow](.github/workflows/build.yml) runs on pushes and pull requests to `main` that change Rust code, tests, dependencies, build configuration, or packaged desktop assets. Changes limited to `website/` or documentation do not trigger a build. You can also run it manually from **Actions**. Downloads are available under **Artifacts** for each run.
-
-Pushing a version tag such as `v1.0.0` builds both platforms and publishes a [GitHub Release](https://github.com/matheusdmm/Lovelace/releases) with the Windows and Linux archives after all tests and builds pass.
-
-| x64 artifact | Contents |
-| --- | --- |
-| `lovelace-windows-x64.zip` | `lovelace.exe`, `lovelace-desktop.exe`, `WebView2Loader.dll` and `lovelace_captions.py` |
-| `lovelace-linux-x64.tar.gz` | `lovelace`, `lovelace-desktop` and `lovelace_captions.py`, built on Ubuntu 24.04 |
 
 The Windows desktop app requires Microsoft Edge WebView2 Runtime. On Linux, the binaries use ALSA and the desktop app also requires WebKitGTK 4.1. Extract the archive and open the desktop app, then configure engines and models under **Settings → Models and engines**. For CLI use, install the engines and models at the paths below or pass custom paths.
 
@@ -55,11 +52,16 @@ Run this from the project root in PowerShell.
 cargo run --release --features desktop --bin lovelace-desktop
 ```
 
-On Linux, use `cargo +stable run --release --features desktop --bin lovelace-desktop`.
+On Linux, use 
+```bash
+cargo +stable run --release --features desktop --bin lovelace-desktop
+```
 
-Choose **Settings → Appearance → Theme → Loveless**, then **Save settings**, for a dark plum and pink theme inspired by My Bloody Valentine's *Loveless*. The theme also uses dark window controls and is restored when the app reopens.
+The sidebar gives access to **Recorder**, **Sessions**, **Captions**, **Settings** and, once a job starts, **Transcription log**.
 
-On first launch, open **Settings → Models and engines**. Choose a Whisper size (Tiny, Base, Small, Medium or Large v3 Turbo), a summary model (Qwen2.5 1.5B or 3B), and download the whisper.cpp and llama.cpp engines. **Download & use** verifies each download against its pinned SHA-256, extracts engine libraries and activates it automatically. **Browse…** selects an existing executable and preserves its surrounding libraries.
+Under **Settings -> Recording and captions**, set **Default spoken language** to **Portuguese**, **English** or **Auto-detect**, then **Save settings**. This sets the initial language for both recording and captions. Appearance and language preferences persist across launches; you can still choose a language for each job.
+
+On first launch, open **Settings -> Models and engines**. Choose a Whisper size (Tiny, Base, Small, Medium or Large v3 Turbo), a summary model (Qwen2.5 1.5B or 3B), and download the whisper.cpp and llama.cpp engines. **Download & use** verifies each download against its pinned SHA-256, extracts engine libraries and activates it automatically. **Browse…** selects an existing executable and preserves its surrounding libraries.
 
 Under **llama.cpp · engine**, choose a backend matching your hardware. Downloads are filtered to the operating system and architecture of the running app. The distributed Lovelace binaries are Windows and Linux x64; the engine catalog also includes ARM64 variants for native ARM64 builds.
 
@@ -77,8 +79,9 @@ CUDA choices include their official companion runtime package. Settings shows th
 
 Downloads are stored under the application's per-user data directory, shown in Settings. A progress indicator reports bytes transferred, with cancellation and retry after failure. Partial downloads are never activated. **Delete download…** removes a managed download after confirmation; external files are preserved. **Use default path** clears a selection. Model choices persist independently of **Save settings**. Finish or cancel a download before closing the app or starting a job; selections and deletion are blocked while a job is running. The CLI and OBS continue to use their own paths and flags. FFmpeg remains a separate requirement for captions.
 
-- **Recorder**. The interface is in English. Under **Spoken language**, choose **Portuguese**, **English** or **Auto-detect** for the transcript and summary. Select **Record** to capture from the default microphone and see the elapsed time and input level. **Stop** saves the WAV file and starts processing in the background.
-- **History**. The dashboard shows the three most recent sessions. Open **History** for the full list, including sessions recorded with the CLI. Each status shows whether the audio, transcript or summary is ready.
+- **Recorder**. The interface is in English. Under **Audio input**, keep **System default** or select a microphone. Use **Refresh audio inputs** after connecting or changing a device, then select it from the updated list. Under **Spoken language**, choose **Portuguese**, **English** or **Auto-detect** for the transcript and summary. Select **Start recording** to capture audio and see the elapsed time and live input-level chart. **Stop** saves the WAV file and starts processing in the background.
+- **Sessions**. The Recorder shows the three most recent sessions. Open **Sessions** or **View all** for the full list, including sessions recorded with the CLI. Each status shows whether the audio, transcript or summary is ready. Favorites appear first in the full list.
+- **Session actions**. Open a session's **…** menu or right-click its row to add or remove a favorite, open the summary or transcript source in your system's default app, or open the session folder. **Delete session…** asks for confirmation before permanently deleting the recording and all files in its folder. Deletion is unavailable while a job is running.
 - **Documents and audio**. Open a session to switch between **Summary** and **Transcript**, copy the displayed Markdown or play the WAV file. The transcript keeps the full speech in paragraphs without segment labels or timestamps. Paragraphs follow sentence endings and pauses; the speech is not rewritten or summarized. Older segment-based transcripts also use this readable view without modifying the saved originals. Select a timestamp in the summary to open the corresponding transcript paragraph and seek to that point in the audio.
 - **Reprocessing**. Select **Resume processing** to reuse a completed transcription and finish a session without a summary. **Restart transcription…** starts again from the audio, including when that session is currently transcribing or generating its summary. It stops and waits for the previous engine, backs up existing results to a `restart-backup-*` folder in the session, and regenerates both documents. The audio is preserved.
 - **Transcription log**. This sidebar section appears after a job starts and remains available until the app closes. It shows the current stage, elapsed time, activity and expandable Whisper output, with resume/restart controls for recording sessions. The percentage represents stages and stays fixed while a stage runs. The Recorder stays focused on recording controls and recent sessions. Whisper output is also saved as `whisper.log` in the session folder.
@@ -91,8 +94,8 @@ By default, Lovelace saves the SRT next to the input, so `recording.mkv` produce
 
 ### From the desktop app
 
-1. Open **Create captions** on the dashboard.
-2. Drop a video or audio file into the window, or paste its path into **Media file**.
+1. Open **Captions** in the sidebar.
+2. Use **Browse…** to choose a video or audio file, drop it into the window, or paste its path into **Audio or video file**.
 3. Choose **Portuguese**, **English**, or **Auto-detect** under **Spoken language**. **Audio track** defaults to 1 and follows the order of the audio tracks in the file.
 4. Select **Generate SRT**. The app displays the subtitle path when it finishes.
 
@@ -129,13 +132,11 @@ Use `--language pt` for Brazilian Portuguese, `--language en` for English or `--
 
 ## Regression tests
 
-Run the suite from the project root on Windows.
+Run the suite from the project root.
 
-```powershell
+```bash
 cargo test --locked --release --features desktop
 ```
-
-On Linux, use `cargo +stable test --locked --release --features desktop` with the build dependencies listed in the workflow. The suite covers CLI commands, session processing and retries, summary references, the desktop backend for history and Markdown, SRT timing, and preservation of existing subtitles. It uses temporary sessions with generated WAV files and fixed Whisper results, so it runs without a microphone or models. The build workflow runs the suite on both platforms before packaging.
 
 ## Pipeline and storage
 
@@ -150,5 +151,10 @@ Sessions are stored in `sessoes/sessao-<timestamp>-<suffix>/`.
 | --- | --- |
 | `audio.wav` | Original recording |
 | `whisper.json` | Detected or selected language and timestamped speech segments |
+| `whisper.log` | Whisper engine output for troubleshooting |
 | `transcricao.md` | Full transcript in paragraphs, without timestamps or segment labels |
 | `sintese.md` | Summary notes with links to the transcript |
+| `.favorite` | Marker created when a session is added to favorites |
+| `restart-backup-*/` | Previous processing results preserved when restarting transcription |
+
+The desktop app stores sessions relative to the application folder, or the repository root when running from a source checkout. Desktop preferences and model selections are stored separately in the per-user application configuration directory; managed model and engine downloads use the per-user data directory shown in Settings.

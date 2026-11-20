@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Lovelace turns recordings into timestamped transcripts, linked Markdown notes, and SRT captions for audio, video, and OBS Studio recordings. Processing stays on your machine.">
+  <meta name="description" content="Lovelace turns recordings into full-text transcripts, linked Markdown notes, and SRT captions. Choose your microphone, download models in the app, and process locally on Windows and Linux.">
   <meta name="theme-color" content="#f8f6f0">
   <script src="theme.js"></script>
-  <title>Lovelace - Your voice into text.</title>
+  <title>Lovelace - Your voice outside your head.</title>
   <link rel="icon" href="assets/lovelace.png" type="image/png">
   <link rel="stylesheet" href="styles.css">
   <script src="repository.js?v=3af0313" defer></script>
@@ -42,7 +42,7 @@
       <div class="shell hero-inner">
         <div class="hero-copy">
           <h1 id="hero-title">Think out<br><em>loud.</em></h1>
-          <p class="hero-description">Follow a tangent. Rehearse a talk. Record a video. Lovelace turns your voice into linked notes and gives your recording caption you can publish.</p>
+          <p class="hero-description">Follow a tangent. Rehearse a talk. Record a video. Lovelace turns your voice into linked notes and gives your recordings captions you can publish.</p>
           <div class="hero-actions">
             <a class="button button-primary" href="#get-started">Get started</a>
             <a class="button button-secondary" href="#workflow">See how it works</a>
@@ -80,6 +80,12 @@
           <a href="assets/printscreen_1.png" target="_blank" rel="noopener">View full size</a>
         </figcaption>
       </figure>
+      <dl class="source-list workflow-details">
+        <div><dt>Read and listen</dt><dd>Read the full transcript in paragraphs, switch to the summary, or play the recording. Select a summary timestamp to jump to the matching paragraph and seek to that moment in the audio.</dd></div>
+        <div><dt>Keep your sessions</dt><dd>Open <strong>Sessions</strong> for your recording history and keep favorites at the top. Each session’s <strong>…</strong> menu lets you open the original Markdown files or session folder, or delete a session after confirmation.</dd></div>
+        <div><dt>Pick up where you left off</dt><dd>Use <strong>Resume processing</strong> to reuse a completed transcription and generate the summary. <strong>Restart transcription…</strong> starts again from the audio and backs up previous results in the session folder.</dd></div>
+        <div><dt>Follow the progress</dt><dd>The <strong>Transcription log</strong> shows the current stage, elapsed time and Whisper output. Progress advances between stages and stays fixed while each stage runs.</dd></div>
+      </dl>
     </section>
 
     <section id="captions" class="section shell" aria-labelledby="captions-title">
@@ -92,11 +98,11 @@
       <div class="setup-body run-guide">
         <div>
           <h3>From the desktop app</h3>
-          <p>Open <strong>Create captions</strong>, drop a video or audio file into the window or paste its path, then select <strong>Generate SRT</strong>. Lovelace saves the subtitles alongside the recording and preserves the original media and any existing subtitle file.</p>
+          <p>Open <strong>Captions</strong> in the sidebar. Use <strong>Browse…</strong> to choose a video or audio file, drop it into the window or paste its path, then select <strong>Generate SRT</strong>. Lovelace saves the subtitles alongside the recording and preserves the original media and any existing subtitle file.</p>
         </div>
         <div>
           <h3>After an OBS Studio recording</h3>
-          <p>In OBS Studio 29 or later, open <strong>Tools → Scripts</strong> and add <code>lovelace_captions.py</code> from the Lovelace archive or the source checkout’s <code>obs/</code> folder. Configure Python under <strong>Python Settings</strong> if your OBS build requires it.</p>
+          <p>In OBS Studio 29 or later, open <strong>Tools > Scripts</strong> and add <code>lovelace_captions.py</code> from the Lovelace archive or the source checkout’s <code>obs/</code> folder. Configure Python under <strong>Python Settings</strong> if your OBS build requires it.</p>
           <p class="setup-next">Set <strong>Lovelace CLI</strong> to the executable and choose your language and audio track. For a source build, set <strong>Folder containing engines and models</strong> to the repository root. With <strong>Generate captions after recording</strong> enabled, the script writes the SRT in the background after you stop recording. For split recordings, it captions the last file OBS reports. See the <a href="https://docs.obsproject.com/scripting">OBS scripting guide</a>.</p>
         </div>
         <div>
@@ -119,7 +125,7 @@
         </div>
         <dl class="audience-list">
           <div><dt>Speakers</dt><dd>Rehearse a talk and go back to the moments where the story lands.</dd></div>
-          <div><dt>Teachers &amp; professors</dt><dd>Your redorded essays and lessons can have transcriptions and a core documentation with Lovelace.</dd></div>
+          <div><dt>Teachers &amp; professors</dt><dd>Transcribe a recorded lesson and keep notes linked to the moments you want to revisit.</dd></div>
           <div><dt>Artists &amp; writers</dt><dd>Talk through a sketch, an essay, or a scene and keep the lines you want to build on.</dd></div>
           <div><dt>Podcasters</dt><dd>Talk through an episode angle, then generate subtitles for the finished recording.</dd></div>
           <div><dt>Video creators</dt><dd>Caption a finished OBS recording using the audio track that carries your voice.</dd></div>
@@ -138,7 +144,7 @@
         </div>
         <dl class="source-list">
           <div><dt>Capture</dt><dd><code>src/audio.rs</code> writes microphone input to a local WAV file.</dd></div>
-          <div><dt>Transcription</dt><dd><code>src/pipeline.rs</code> runs Whisper and saves timestamped segments as Markdown.</dd></div>
+          <div><dt>Transcription</dt><dd><code>src/pipeline.rs</code> runs Whisper and keeps timestamped segments in JSON. <code>src/transcript.rs</code> joins the speech into Markdown paragraphs without timestamps or segment labels.</dd></div>
           <div><dt>Summarization</dt><dd><code>src/synthesis.rs</code> calls a local llama.cpp server at <code>127.0.0.1</code> and writes notes with source timestamps.</dd></div>
           <div><dt>Captions</dt><dd><code>src/captions.rs</code> extracts an audio track with FFmpeg and writes an SRT from Whisper timestamps. <code>obs/lovelace_captions.py</code> calls the CLI when OBS finishes recording.</dd></div>
           <div><dt>Builds</dt><dd><code>.github/workflows/build.yml</code> shows how the Windows and Linux binaries are tested and packaged.</dd></div>
@@ -183,7 +189,7 @@ cargo +stable build --locked --release --features desktop --bins</code><button c
         <div>
           <h2 id="run-title">Make a first recording.</h2>
         </div>
-        <p>Use a microphone and install the runtime libraries, engines, and models on the computer where you plan to record.</p>
+        <p>Install the desktop runtime, then choose your engines and models in the app. Connect a microphone and you’re ready to record.</p>
       </div>
       <div class="setup-body run-guide">
         <div>
@@ -194,23 +200,30 @@ sudo apt-get install libasound2t64 libwebkit2gtk-4.1-0 libxdo3 libayatana-appind
           <p class="copy-status" role="status"></p>
         </div>
         <div>
-          <h3>Add the engines and models</h3>
-          <p>Use the extracted archive folder or the root of your source checkout. Create the paths below and install the libraries that come with each engine. Add <code>.exe</code> to both engine filenames on Windows. On Linux, make the engine binaries executable and keep their shared libraries available to the loader.</p>
+          <h3>Download engines and models in the app</h3>
+          <p>Launch <code>lovelace-desktop.exe</code> on Windows or <code>./lovelace-desktop</code> on Linux. For a source build, open the executable in <code>target/release/</code>. Go to <strong>Settings > Models and engines</strong>, choose your Whisper and summary models, and download the whisper.cpp and llama.cpp engines with <strong>Download &amp; use</strong>.</p>
+          <p class="setup-next">Each download is checked against its pinned SHA-256, installed and selected automatically. You can follow the download progress, cancel it or retry after a failure. Choose a <a href="#engine-backends">CPU or GPU backend</a> that fits your hardware, or use <strong>Browse…</strong> to select files you already have.</p>
+          <p class="setup-next">Selections are saved immediately. Downloads go into the per-user data directory shown in Settings. The CLI and OBS use their own paths and flags; the manual setup below applies to them.</p>
+          <details class="manual-setup">
+            <summary>Manual setup for CLI and OBS</summary>
+            <p>Use the extracted archive folder or the root of your source checkout. Create the paths below and install the libraries that come with each engine. Add <code>.exe</code> to both engine filenames on Windows. On Linux, make the engine binaries executable and keep their shared libraries available to the loader.</p>
           <ul class="engine-list">
             <li><a href="https://github.com/ggml-org/whisper.cpp/releases/tag/b5127">Whisper CLI</a><code>engines/whisper/Release/whisper-cli</code><span>Choose the CPU build for your platform.</span></li>
-            <li><a href="https://github.com/ggml-org/llama.cpp/releases/tag/b12289">llama.cpp server</a><code>engines/llama/llama-server</code><span>For GPU acceleration, choose the Vulkan build and install a compatible driver. The CLI supports <code>--cpu</code> with a CPU build.</span></li>
+            <li><a href="https://github.com/ggml-org/llama.cpp/releases/tag/b12289">llama.cpp server</a><code>engines/llama/llama-server</code><span>Choose a backend compatible with your hardware and install its required libraries and drivers. The CLI supports <code>--cpu</code> with a CPU build.</span></li>
             <li><a href="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin">Whisper Small</a><code>models/ggml-small-q5_1.bin</code><span>Multilingual speech recognition model.</span></li>
             <li><a href="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/blob/main/qwen2.5-3b-instruct-q4_k_m.gguf">Qwen2.5 3B Instruct</a><code>models/qwen2.5-3b-instruct-q4_k_m.gguf</code><span>Download the Q4_K_M GGUF for summarization.</span></li>
           </ul>
+          </details>
           <p class="setup-next"><a href="#models">Compare models and use your own files</a>.</p>
         </div>
         <div id="caption-requirements">
           <h3>Install FFmpeg for captions</h3>
-          <p>Install <a href="https://ffmpeg.org/download.html">FFmpeg</a> on your <code>PATH</code> and set up the Whisper engine and model listed above. Captions use FFmpeg and Whisper. Markdown summaries also use llama.cpp and a GGUF model. Restart Lovelace or OBS if it was open when you updated <code>PATH</code>. In the CLI, use <code>--ffmpeg</code> to specify a custom executable.</p>
+          <p>Install <a href="https://ffmpeg.org/download.html">FFmpeg</a> separately on your <code>PATH</code>. Captions use FFmpeg and your selected Whisper engine and model. Markdown summaries also use llama.cpp and a GGUF model. Restart Lovelace or OBS if it was open when you updated <code>PATH</code>. In the CLI, use <code>--ffmpeg</code> to specify a custom executable.</p>
         </div>
         <div>
           <h3>Record and review</h3>
-          <p>Launch <code>lovelace-desktop.exe</code> on Windows or <code>./lovelace-desktop</code> on Linux. For a source build, launch the executable from <code>target/release/</code>. Select English, Portuguese, or Auto-detect, then record and stop to process the session.</p>
+          <p>In <strong>Recorder</strong>, keep <strong>System default</strong> under <strong>Audio input</strong> or choose a microphone. Use <strong>Refresh audio inputs</strong> after connecting a device. Choose English, Portuguese or Auto-detect, then select <strong>Start recording</strong>. The timer and live input-level chart show the capture; <strong>Stop</strong> saves the audio and starts processing.</p>
+          <p class="setup-next">Set a default language for recordings and captions under <strong>Settings > Recording and captions</strong>, then select <strong>Save settings</strong>. You can still change the language for each job. Your three most recent sessions appear in Recorder; open <strong>Sessions</strong> to review the full history and copy a transcript or summary as Markdown.</p>
           <p class="setup-next">To use the CLI, run <code>lovelace record --language en</code> from the folder containing <code>engines/</code> and <code>models/</code>. Invoke the binary by its path if needed. Add <code>--cpu</code> for CPU processing, or <code>--audio-only</code> to save a WAV without processing. Sessions are saved in <code>sessoes/</code>.</p>
         </div>
       </div>
@@ -222,12 +235,13 @@ sudo apt-get install libasound2t64 libwebkit2gtk-4.1-0 libxdo3 libayatana-appind
           <div>
             <h2 id="models-title">Bring your own model.</h2>
           </div>
-          <p>Lovelace uses Whisper for transcripts and captions, and an instruction-tuned GGUF model for notes. Download the models you need and choose sizes that fit your machine.</p>
+          <p>Choose models that fit your machine. Download them in Settings or browse for your own Whisper and instruction-tuned GGUF files.</p>
         </div>
         <div class="setup-body run-guide">
           <div>
             <h3>Transcription with whisper.cpp</h3>
             <p>Choose a multilingual Whisper <code>.bin</code> for English, Brazilian Portuguese, or auto-detection. Models with <code>.en</code> in the filename are English-only.</p>
+            <p class="setup-next">The app offers Tiny, Base, Small, Medium and Large v3 Turbo. Start with Small and compare sizes as you learn what works for your recordings.</p>
             <ul class="engine-list">
               <li><a href="https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-base-q5_1.bin">Whisper Base</a><code>ggml-base-q5_1.bin · 59.7 MB</code><span>Try this when processing time matters most.</span></li>
               <li><a href="https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-small-q5_1.bin">Whisper Small</a><code>ggml-small-q5_1.bin · 190 MB</code><span>The Lovelace default and a starting point for everyday recordings.</span></li>
@@ -237,6 +251,7 @@ sudo apt-get install libasound2t64 libwebkit2gtk-4.1-0 libxdo3 libayatana-appind
           <div>
             <h3>Summarization with llama.cpp</h3>
             <p>Choose an instruction-tuned <code>.gguf</code> that llama.cpp can load with a chat template. Lovelace requests structured JSON to link notes to transcript segments.</p>
+            <p class="setup-next">Settings offers Qwen2.5 1.5B and 3B downloads. Use <strong>Browse…</strong> for other compatible models, including the 7B option below.</p>
             <ul class="engine-list">
               <li><a href="https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/blob/main/qwen2.5-1.5b-instruct-q4_k_m.gguf">Qwen2.5 1.5B Instruct</a><code>Q4_K_M · 1.12 GB</code><span>A smaller download to try on a machine with limited memory. Apache 2.0.</span></li>
               <li><a href="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/blob/main/qwen2.5-3b-instruct-q4_k_m.gguf">Qwen2.5 3B Instruct</a><code>Q4_K_M · 2.1 GB</code><span>The Lovelace default. The publisher lists it under the Qwen Research license.</span></li>
@@ -246,9 +261,28 @@ sudo apt-get install libasound2t64 libwebkit2gtk-4.1-0 libxdo3 libayatana-appind
           </div>
           <div>
             <h3>Choose model files</h3>
-            <p>The desktop app reads the default filenames in <a href="#run-locally">Local setup</a>. For <code>record</code> and <code>process</code>, use <code>--whisper-model</code> and <code>--llama-model</code> to select files by path. For <code>captions</code>, use <code>--whisper-model</code>.</p>
+            <p>In <strong>Settings > Models and engines</strong>, use <strong>Browse…</strong> to choose an existing model or engine executable. Saved selections apply to recordings, retries, restarts and captions. For managed downloads, <strong>Use model / engine</strong> switches between installed options; <strong>Delete download…</strong> removes one after confirmation and preserves external files.</p>
+            <p class="setup-next">The app falls back to the default paths in <a href="#run-locally">Local setup</a> when no selection is saved. For CLI <code>record</code> and <code>process</code>, use <code>--whisper-model</code> and <code>--llama-model</code> to select files by path. For <code>captions</code>, use <code>--whisper-model</code>.</p>
             <div class="command"><code>lovelace record --language pt --whisper-model models/ggml-base-q5_1.bin --llama-model models/qwen2.5-1.5b-instruct-q4_k_m.gguf</code><button class="copy-command" type="button">Copy</button></div>
             <p class="copy-status" role="status"></p>
+          </div>
+          <div id="engine-backends">
+            <h3>Choose how llama.cpp runs</h3>
+            <p>The app lists engines for your operating system and architecture. Choose CPU to run on the processor, or a GPU backend supported by your hardware and drivers.</p>
+            <table class="backend-table">
+              <caption>llama.cpp backends available in Settings</caption>
+              <thead><tr><th scope="col">Backend</th><th scope="col">Hardware and requirements</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">CPU</th><td>Processor only; no GPU runtime required.</td></tr>
+                <tr><th scope="row">Vulkan</th><td>NVIDIA, AMD or Intel GPUs with a compatible Vulkan driver.</td></tr>
+                <tr><th scope="row">CUDA</th><td>Supported NVIDIA GPUs with a driver compatible with the selected CUDA version.</td></tr>
+                <tr><th scope="row">ROCm</th><td>Supported AMD GPUs with a compatible ROCm driver; x64.</td></tr>
+                <tr><th scope="row">SYCL</th><td>Supported Intel GPUs, including Arc and integrated graphics; x64. Linux also needs a compatible oneAPI/Level Zero runtime.</td></tr>
+                <tr><th scope="row">OpenVINO</th><td>Supported Intel hardware; x64. GPU and NPU use needs matching drivers.</td></tr>
+                <tr><th scope="row">OpenCL Adreno</th><td>Qualcomm Adreno with an OpenCL driver; Windows ARM64.</td></tr>
+              </tbody>
+            </table>
+            <p class="setup-next">CUDA downloads include their companion runtime libraries. Lovelace binaries are distributed for Windows and Linux x64; ARM64 engine options are for native ARM64 builds. Linux engine packages are upstream Ubuntu builds and may need additional system libraries on other distributions.</p>
           </div>
         </div>
       </div>
@@ -260,7 +294,7 @@ sudo apt-get install libasound2t64 libwebkit2gtk-4.1-0 libxdo3 libayatana-appind
           <div>
             <h2 id="download-title">Get Lovelace.</h2>
           </div>
-          <p>Each x64 archive contains the desktop app, CLI, and OBS caption script. Install the local engines and models after extracting it.</p>
+          <p>Each x64 archive contains the desktop app, CLI, and OBS caption script. Extract it, open the app and download your engines and models in Settings.</p>
         </div>
         <ul class="download-list">
           <li>
